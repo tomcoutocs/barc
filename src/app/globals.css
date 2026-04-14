@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+:root {
+  /* DESIGN.md — Midnight Forest & Terracotta */
+  --color-primary: #000b0b;
+  --color-primary-container: #0b2424;
+  --color-secondary: #9a442d;
+  --color-secondary-bright: #e07a5f;
+  --color-surface: #fdfae7;
+  --color-surface-container-low: #f7f4e1;
+  --color-surface-container-high: #e6e3d0;
+  --color-tertiary: #84a59d;
+  --color-on-primary: #ffffff;
+  --color-on-surface: #1a1a14;
+  --color-on-surface-muted: rgba(26, 26, 20, 0.72);
+  --shadow-float: 0 20px 40px rgba(0, 11, 11, 0.05);
+}
+
+@theme inline {
+  --color-surface: var(--color-surface);
+  --color-surface-low: var(--color-surface-container-low);
+  --color-surface-high: var(--color-surface-container-high);
+  --color-primary: var(--color-primary);
+  --color-primary-container: var(--color-primary-container);
+  --color-secondary: var(--color-secondary);
+  --color-secondary-bright: var(--color-secondary-bright);
+  --color-tertiary: var(--color-tertiary);
+  --color-on-primary: var(--color-on-primary);
+  --color-on-surface: var(--color-on-surface);
+  --font-sans: var(--font-manrope);
+}
+
+body {
+  background: var(--color-surface);
+  color: var(--color-on-surface);
+  font-family: var(--font-manrope), system-ui, sans-serif;
+}
