@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import {
+  AlertTriangle,
   Camera,
   CheckCircle2,
   Paperclip,
@@ -10,7 +11,18 @@ import {
   Shield,
   Lock,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import {
+  parseStoredAgentContent,
+  type ConsultAgentResponse,
+} from "@/types/consult-agent";
 
 export type ConsultPet = {
   id: string;
@@ -26,6 +38,232 @@ export type ConsultMessage = {
   content: string;
   created_at: string;
 };
+
+function triageBubbleClass(level: string): string {
+  switch (level) {
+    case "emergency":
+      return "border-[color-mix(in_srgb,var(--color-secondary)_50%,transparent)] bg-[color-mix(in_srgb,var(--color-secondary)_10%,var(--color-surface))]";
+    case "high":
+      return "border-[color-mix(in_srgb,var(--color-tertiary)_45%,transparent)] bg-[color-mix(in_srgb,var(--color-tertiary)_8%,var(--color-surface))]";
+    case "moderate":
+      return "border-[color-mix(in_srgb,var(--color-primary)_30%,transparent)] bg-[var(--color-surface)]";
+    default:
+      return "border-[color-mix(in_srgb,var(--color-on-surface)_14%,transparent)] bg-[var(--color-surface)]";
+  }
+}
+
+function TypingIndicator() {
+  return (
+    <div
+      className="max-w-[92%] rounded-3xl rounded-bl-md border border-[color-mix(in_srgb,var(--color-on-surface)_12%,transparent)] bg-[var(--color-surface)] px-5 py-4 shadow-[var(--shadow-float)]"
+      role="status"
+      aria-label="Assistant is typing"
+    >
+      <div className="flex items-center gap-1.5 px-1 py-0.5">
+        <span className="consult-typing-dot inline-block h-2 w-2 rounded-full bg-[var(--color-on-surface-muted)]" />
+        <span className="consult-typing-dot inline-block h-2 w-2 rounded-full bg-[var(--color-on-surface-muted)]" />
+        <span className="consult-typing-dot inline-block h-2 w-2 rounded-full bg-[var(--color-on-surface-muted)]" />
+      </div>
+    </div>
+  );
+}
+
+type BubbleChunk = { key: string; children: ReactNode };
+
+function buildStructuredChunks(a: ConsultAgentResponse): BubbleChunk[] {
+  const chunks: BubbleChunk[] = [
+    {
+      key: "intro",
+      children: (
+        <>
+          <div className="flex flex-wrap items-center gap-2 border-b border-[color-mix(in_srgb,var(--color-on-surface)_10%,transparent)] pb-3">
+            <span className="rounded-full bg-[var(--color-primary-container)] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--color-on-primary)]">
+              {a.triage_level}
+            </span>
+            {a.triage_level === "emergency" ? (
+              <AlertTriangle
+                className="h-4 w-4 shrink-0 text-[var(--color-secondary)]"
+                aria-hidden
+              />
+            ) : null}
+          </div>
+          <p className="mt-3 text-sm leading-relaxed text-[var(--color-on-surface-muted)]">
+            Thanks for sharing—I’ve laid this out in a few short messages so it’s
+            easier to read. This is educational only, not a diagnosis for your dog.
+          </p>
+          <p className="mt-3 font-bold text-[var(--color-secondary)]">{a.urgency_message}</p>
+          <p className="mt-3 leading-relaxed">{a.summary}</p>
+        </>
+      ),
+    },
+  ];
+
+  if (a.possible_causes.length > 0) {
+    chunks.push({
+      key: "causes",
+      children: (
+        <>
+          <p className="text-xs font-bold uppercase tracking-wide text-[var(--color-on-surface-muted)]">
+            Possible angles to discuss with your vet
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-[var(--color-on-surface-muted)]">
+            Vets sometimes think about themes like these—they’re general ideas, not
+            what’s definitely going on with your pup.
+          </p>
+          <ul className="mt-3 list-inside list-disc space-y-1.5 leading-relaxed">
+            {a.possible_causes.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </>
+      ),
+    });
+  }
+
+  if (a.what_to_monitor.length > 0) {
+    chunks.push({
+      key: "monitor",
+      children: (
+        <>
+          <p className="text-xs font-bold uppercase tracking-wide text-[var(--color-on-surface-muted)]">
+            What I’d keep an eye on
+          </p>
+          <p className="mt-1 text-xs text-[var(--color-on-surface-muted)]">
+            If any of these show up or get worse, it’s worth looping your clinic in
+            sooner.
+          </p>
+          <ul className="mt-3 list-inside list-disc space-y-1.5 leading-relaxed">
+            {a.what_to_monitor.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </>
+      ),
+    });
+  }
+
+  if (a.recommended_action.length > 0) {
+    chunks.push({
+      key: "actions",
+      children: (
+        <>
+          <p className="text-xs font-bold uppercase tracking-wide text-[var(--color-on-surface-muted)]">
+            Practical next steps
+          </p>
+          <p className="mt-1 text-xs text-[var(--color-on-surface-muted)]">
+            Gentle, general suggestions—your vet can tailor these to your dog.
+          </p>
+          <ul className="mt-3 list-inside list-disc space-y-1.5 leading-relaxed">
+            {a.recommended_action.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </>
+      ),
+    });
+  }
+
+  return chunks;
+}
+
+function buildPlainChunks(content: string): BubbleChunk[] {
+  const blocks = content
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (blocks.length <= 1) {
+    return [{ key: "plain", children: content }];
+  }
+  return blocks.slice(0, 5).map((block, i) => ({
+    key: `plain-${i}`,
+    children: <p className="whitespace-pre-wrap leading-relaxed">{block}</p>,
+  }));
+}
+
+function AssistantConsultMessage({
+  content,
+  stagger,
+  onStaggerProgress,
+  onStaggerComplete,
+}: {
+  content: string;
+  stagger?: boolean;
+  onStaggerProgress?: () => void;
+  onStaggerComplete?: () => void;
+}) {
+  const { structured } = parseStoredAgentContent(content);
+  const level = structured?.triage_level ?? "low";
+
+  const chunks = useMemo(() => {
+    if (structured) return buildStructuredChunks(structured);
+    return buildPlainChunks(content);
+  }, [structured, content]);
+
+  const [visibleCount, setVisibleCount] = useState(stagger ? 0 : chunks.length);
+
+  useEffect(() => {
+    if (!stagger) {
+      setVisibleCount(chunks.length);
+      return;
+    }
+    setVisibleCount(0);
+    let cancelled = false;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    timers.push(
+      setTimeout(() => {
+        let shown = 0;
+        const showNext = () => {
+          if (cancelled) return;
+          shown += 1;
+          setVisibleCount(shown);
+          onStaggerProgress?.();
+          if (shown >= chunks.length) {
+            onStaggerComplete?.();
+            return;
+          }
+          timers.push(setTimeout(showNext, 520));
+        };
+        showNext();
+      }, 420),
+    );
+    return () => {
+      cancelled = true;
+      timers.forEach(clearTimeout);
+    };
+  }, [stagger, chunks.length, onStaggerProgress, onStaggerComplete]);
+
+  if (!structured) {
+    return (
+      <div className="flex flex-col gap-3">
+        {chunks.slice(0, visibleCount).map((chunk, idx) => (
+          <div
+            key={chunk.key}
+            className={`max-w-[92%] rounded-3xl rounded-bl-md bg-[var(--color-surface)] px-5 py-4 text-sm leading-relaxed text-[var(--color-on-surface)] shadow-[var(--shadow-float)] ${
+              stagger && idx === visibleCount - 1 ? "consult-bubble-enter" : ""
+            }`}
+          >
+            {chunk.children}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      {chunks.slice(0, visibleCount).map((chunk, idx) => (
+        <div
+          key={chunk.key}
+          className={`max-w-[92%] rounded-3xl rounded-bl-md border-2 px-5 py-4 text-sm leading-relaxed text-[var(--color-on-surface)] shadow-[var(--shadow-float)] ${triageBubbleClass(level)} ${
+            stagger && idx === visibleCount - 1 ? "consult-bubble-enter" : ""
+          }`}
+        >
+          {chunk.children}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export function ConsultChat({
   pets,
@@ -44,6 +282,7 @@ export function ConsultChat({
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [staggerAssistantId, setStaggerAssistantId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const activePet = useMemo(
@@ -51,23 +290,47 @@ export function ConsultChat({
     [pets, activePetId],
   );
 
+  const bumpScroll = useCallback(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, []);
+
+  const completeStagger = useCallback(() => {
+    setStaggerAssistantId(null);
+  }, []);
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, sending]);
+  }, [messages, sending, staggerAssistantId]);
 
   function clearHistory() {
     setThreadId(null);
     setMessages([]);
     setError(null);
+    setStaggerAssistantId(null);
   }
 
   async function sendMessage(e?: React.FormEvent) {
     e?.preventDefault();
     const text = draft.trim();
     if (!text || sending) return;
+
+    const optimisticId = `local-${crypto.randomUUID()}`;
+    const optimisticMessage: ConsultMessage = {
+      id: optimisticId,
+      role: "user",
+      content: text,
+      created_at: new Date().toISOString(),
+    };
+
+    setMessages((m) => [...m, optimisticMessage]);
     setSending(true);
     setError(null);
     setDraft("");
+
+    const dropOptimistic = () => {
+      setMessages((m) => m.filter((x) => x.id !== optimisticId));
+    };
+
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
@@ -83,17 +346,29 @@ export function ConsultChat({
         threadId?: string;
         userMessage?: ConsultMessage;
         assistantMessage?: ConsultMessage;
+        agentResponse?: ConsultAgentResponse | null;
       };
       if (!res.ok) {
+        dropOptimistic();
         setError(data.error ?? "Could not send");
         setDraft(text);
         return;
       }
       if (data.threadId) setThreadId(data.threadId);
       if (data.userMessage && data.assistantMessage) {
-        setMessages((m) => [...m, data.userMessage!, data.assistantMessage!]);
+        setStaggerAssistantId(data.assistantMessage.id);
+        setMessages((m) => [
+          ...m.filter((x) => x.id !== optimisticId),
+          data.userMessage!,
+          data.assistantMessage!,
+        ]);
+      } else {
+        dropOptimistic();
+        setError("Something went wrong");
+        setDraft(text);
       }
     } catch {
+      dropOptimistic();
       setError("Network error");
       setDraft(text);
     } finally {
@@ -237,19 +512,29 @@ export function ConsultChat({
               account.
             </p>
           ) : (
-            messages.map((m) => (
-              <div
-                key={m.id}
-                className={
-                  m.role === "user"
-                    ? "ml-auto max-w-[85%] rounded-3xl rounded-br-md bg-[var(--color-primary-container)] px-5 py-4 text-sm leading-relaxed text-[var(--color-on-primary)]"
-                    : "max-w-[92%] rounded-3xl rounded-bl-md bg-[var(--color-surface)] px-5 py-4 text-sm leading-relaxed text-[var(--color-on-surface)] shadow-[var(--shadow-float)] whitespace-pre-wrap"
-                }
-              >
-                {m.content}
-              </div>
-            ))
+            messages.map((m) =>
+              m.role === "user" ? (
+                <div
+                  key={m.id}
+                  className={`ml-auto max-w-[85%] rounded-3xl rounded-br-md bg-[var(--color-primary-container)] px-5 py-4 text-sm leading-relaxed text-[var(--color-on-primary)] ${
+                    m.id.startsWith("local-") ? "opacity-90" : ""
+                  }`}
+                  aria-busy={m.id.startsWith("local-") ? true : undefined}
+                >
+                  {m.content}
+                </div>
+              ) : (
+                <AssistantConsultMessage
+                  key={m.id}
+                  content={m.content}
+                  stagger={m.id === staggerAssistantId}
+                  onStaggerProgress={bumpScroll}
+                  onStaggerComplete={completeStagger}
+                />
+              ),
+            )
           )}
+          {sending ? <TypingIndicator /> : null}
           <div ref={bottomRef} />
         </div>
 
@@ -283,8 +568,9 @@ export function ConsultChat({
             </button>
           </form>
           <p className="mt-3 text-center text-[11px] leading-relaxed text-[var(--color-on-surface-muted)]">
-            Barc AI provides general information only—not a diagnosis. For
-            emergencies, contact your vet or an ER clinic immediately.
+            When connected to the Barc knowledge backend, answers use retrieved
+            veterinary sources plus safety triage. This is still not a diagnosis.
+            Emergencies: contact your vet or an ER clinic immediately.
           </p>
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold uppercase tracking-wide text-[var(--color-on-surface-muted)]">
             <span className="inline-flex items-center gap-1">

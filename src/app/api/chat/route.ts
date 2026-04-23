@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import type { ConsultAgentResponse } from "@/types/consult-agent";
+import { formatAgentForStorage } from "@/types/consult-agent";
+
+/** Vercel serverless limit (seconds). Pro (or higher) can use long RAG calls; Hobby plans enforce a lower cap—see Vercel docs. */
+export const maxDuration = 120;
 
 type Body = {
   threadId?: string | null;
@@ -51,6 +56,40 @@ async function generateAssistantReply(userMessage: string): Promise<string> {
   return text && text.length > 0 ? text : "I couldn’t generate a reply. Please try again.";
 }
 
+async function callVetRagAgent(message: string): Promise<ConsultAgentResponse | null> {
+  const base = process.env.VET_RAG_API_URL?.replace(/\/$/, "").trim();
+  if (!base) return null;
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  const secret = process.env.VET_RAG_API_SECRET?.trim();
+  if (secret) {
+    headers.Authorization = `Bearer ${secret}`;
+  }
+
+  try {
+    const res = await fetch(`${base}/chat`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ message }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(120_000),
+    });
+    if (!res.ok) {
+      const t = await res.text();
+      console.error("[vet-rag] /chat error", res.status, t.slice(0, 500));
+      return null;
+    }
+    const data = (await res.json()) as ConsultAgentResponse;
+    if (!data?.summary || !data?.triage_level) return null;
+    return data;
+  } catch (e) {
+    console.error("[vet-rag] /chat fetch failed", e);
+    return null;
+  }
+}
+
 export async function POST(request: Request) {
   const supabase = await createClient();
   const {
@@ -76,17 +115,26 @@ export async function POST(request: Request) {
   let threadId = body.threadId ?? null;
   const petId = body.petId ?? null;
 
+  let petPrefix = "";
   if (petId) {
     const { data: pet } = await supabase
       .from("pets")
-      .select("id")
+      .select("id, name, breed, age_years")
       .eq("id", petId)
       .eq("user_id", user.id)
       .maybeSingle();
     if (!pet) {
       return NextResponse.json({ error: "Invalid pet" }, { status: 400 });
     }
+    const bits = [
+      `Dog: ${pet.name}`,
+      pet.breed ?? null,
+      pet.age_years != null ? `age ${pet.age_years}y` : null,
+    ].filter(Boolean);
+    petPrefix = `[${bits.join(", ")}] `;
   }
+
+  const ragMessage = `${petPrefix}${content}`;
 
   if (!threadId) {
     const { data: thread, error: tErr } = await supabase
@@ -130,7 +178,16 @@ export async function POST(request: Request) {
     );
   }
 
-  const assistantText = await generateAssistantReply(content);
+  let assistantText: string;
+  let agentResponse: ConsultAgentResponse | null = null;
+
+  const agent = await callVetRagAgent(ragMessage);
+  if (agent) {
+    agentResponse = agent;
+    assistantText = formatAgentForStorage(agent);
+  } else {
+    assistantText = await generateAssistantReply(ragMessage);
+  }
 
   const { data: assistantRow, error: aErr } = await supabase
     .from("chat_messages")
@@ -162,6 +219,6 @@ export async function POST(request: Request) {
     threadId,
     userMessage: userRow,
     assistantMessage: assistantRow,
+    agentResponse,
   });
 }
-
