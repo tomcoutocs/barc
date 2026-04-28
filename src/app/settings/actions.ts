@@ -39,6 +39,8 @@ export async function createPet(formData: FormData) {
   }
 
   const breed = String(formData.get("breed") ?? "").trim() || null;
+  const speciesRaw = String(formData.get("species") ?? "dog").trim().toLowerCase();
+  const species = speciesRaw === "cat" ? "cat" : "dog";
   const ageRaw = String(formData.get("age_years") ?? "").trim();
   const weightRaw = String(formData.get("weight_kg") ?? "").trim();
   const activity_level = String(formData.get("activity_level") ?? "").trim() || null;
@@ -51,6 +53,7 @@ export async function createPet(formData: FormData) {
   const { error } = await supabase.from("pets").insert({
     user_id: user.id,
     name,
+    species,
     breed,
     age_years: Number.isFinite(age_years) ? age_years : null,
     weight_kg: Number.isFinite(weight_kg) ? weight_kg : null,
@@ -88,6 +91,8 @@ export async function updatePet(formData: FormData) {
   }
 
   const breed = String(formData.get("breed") ?? "").trim() || null;
+  const speciesRaw = String(formData.get("species") ?? "dog").trim().toLowerCase();
+  const species = speciesRaw === "cat" ? "cat" : "dog";
   const ageRaw = String(formData.get("age_years") ?? "").trim();
   const weightRaw = String(formData.get("weight_kg") ?? "").trim();
   const activity_level = String(formData.get("activity_level") ?? "").trim() || null;
@@ -101,6 +106,7 @@ export async function updatePet(formData: FormData) {
     .from("pets")
     .update({
       name,
+      species,
       breed,
       age_years: Number.isFinite(age_years) ? age_years : null,
       weight_kg: Number.isFinite(weight_kg) ? weight_kg : null,

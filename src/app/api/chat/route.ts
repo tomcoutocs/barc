@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { fetchFeedbackHintsForUser } from "@/lib/chat-feedback-hints";
 import type { ConsultAgentResponse } from "@/types/consult-agent";
 import { formatAgentForStorage } from "@/types/consult-agent";
 
@@ -12,7 +13,10 @@ type Body = {
   content: string;
 };
 
-async function generateAssistantReply(userMessage: string): Promise<string> {
+async function generateAssistantReply(
+  userMessage: string,
+  preferenceHints: string | null,
+): Promise<string> {
   const key = process.env.OPENAI_API_KEY;
   if (!key) {
     return [
@@ -23,6 +27,10 @@ async function generateAssistantReply(userMessage: string): Promise<string> {
       "Barc does not replace an in-person veterinarian. Seek urgent care for emergencies.",
     ].join("\n");
   }
+
+  const hintBlock = preferenceHints?.trim()
+    ? `\n\nUser feedback (thumbs up and thumbs down on past replies—reinforce what worked, avoid what did not; still follow safety): ${preferenceHints.trim()}`
+    : "";
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -36,7 +44,8 @@ async function generateAssistantReply(userMessage: string): Promise<string> {
         {
           role: "system",
           content:
-            "You are Barc, a careful veterinary information assistant. Give practical, empathetic guidance and always remind users that you are not a substitute for an in-person exam. If symptoms sound severe, urge emergency care.",
+            "You are Barc, a careful veterinary information assistant. Give practical, empathetic guidance and always remind users that you are not a substitute for an in-person exam. If symptoms sound severe, urge emergency care." +
+            hintBlock,
         },
         { role: "user", content: userMessage },
       ],
@@ -56,7 +65,11 @@ async function generateAssistantReply(userMessage: string): Promise<string> {
   return text && text.length > 0 ? text : "I couldn’t generate a reply. Please try again.";
 }
 
-async function callVetRagAgent(message: string): Promise<ConsultAgentResponse | null> {
+async function callVetRagAgent(
+  message: string,
+  species: "dog" | "cat",
+  preferenceHints: string | null,
+): Promise<ConsultAgentResponse | null> {
   const base = process.env.VET_RAG_API_URL?.replace(/\/$/, "").trim();
   if (!base) return null;
 
@@ -72,7 +85,11 @@ async function callVetRagAgent(message: string): Promise<ConsultAgentResponse | 
     const res = await fetch(`${base}/chat`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ message }),
+      body: JSON.stringify({
+        message,
+        species,
+        preference_hints: preferenceHints?.trim() || null,
+      }),
       cache: "no-store",
       signal: AbortSignal.timeout(120_000),
     });
@@ -116,18 +133,21 @@ export async function POST(request: Request) {
   const petId = body.petId ?? null;
 
   let petPrefix = "";
+  let ragSpecies: "dog" | "cat" = "dog";
   if (petId) {
     const { data: pet } = await supabase
       .from("pets")
-      .select("id, name, breed, age_years")
+      .select("id, name, breed, age_years, species")
       .eq("id", petId)
       .eq("user_id", user.id)
       .maybeSingle();
     if (!pet) {
       return NextResponse.json({ error: "Invalid pet" }, { status: 400 });
     }
+    ragSpecies = pet.species === "cat" ? "cat" : "dog";
+    const label = ragSpecies === "cat" ? "Cat" : "Dog";
     const bits = [
-      `Dog: ${pet.name}`,
+      `${label}: ${pet.name}`,
       pet.breed ?? null,
       pet.age_years != null ? `age ${pet.age_years}y` : null,
     ].filter(Boolean);
@@ -135,6 +155,13 @@ export async function POST(request: Request) {
   }
 
   const ragMessage = `${petPrefix}${content}`;
+
+  let preferenceHints: string | null = null;
+  try {
+    preferenceHints = await fetchFeedbackHintsForUser(supabase, user.id);
+  } catch {
+    preferenceHints = null;
+  }
 
   if (!threadId) {
     const { data: thread, error: tErr } = await supabase
@@ -168,7 +195,7 @@ export async function POST(request: Request) {
       role: "user",
       content,
     })
-    .select("id, role, content, created_at")
+    .select("id, role, content, created_at, feedback_rating, feedback_at")
     .single();
 
   if (uErr || !userRow) {
@@ -181,12 +208,12 @@ export async function POST(request: Request) {
   let assistantText: string;
   let agentResponse: ConsultAgentResponse | null = null;
 
-  const agent = await callVetRagAgent(ragMessage);
+  const agent = await callVetRagAgent(ragMessage, ragSpecies, preferenceHints);
   if (agent) {
     agentResponse = agent;
     assistantText = formatAgentForStorage(agent);
   } else {
-    assistantText = await generateAssistantReply(ragMessage);
+    assistantText = await generateAssistantReply(ragMessage, preferenceHints);
   }
 
   const { data: assistantRow, error: aErr } = await supabase
@@ -196,7 +223,7 @@ export async function POST(request: Request) {
       role: "assistant",
       content: assistantText,
     })
-    .select("id, role, content, created_at")
+    .select("id, role, content, created_at, feedback_rating, feedback_at")
     .single();
 
   if (aErr || !assistantRow) {

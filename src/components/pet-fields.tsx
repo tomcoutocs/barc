@@ -1,5 +1,6 @@
 type PetRow = {
   name: string;
+  species: string;
   breed: string | null;
   age_years: number | null;
   weight_kg: number | null;
@@ -38,6 +39,23 @@ export function PetFields({
           defaultValue={d.name ?? ""}
           className="w-full rounded-2xl border-0 bg-[var(--color-surface)] px-3 py-2 text-[var(--color-on-surface)] outline-none ring-2 ring-[color-mix(in_srgb,var(--color-on-surface)_12%,transparent)] focus:ring-[var(--color-secondary-bright)]"
         />
+      </div>
+      <div className="space-y-2">
+        <label
+          htmlFor="species"
+          className="text-xs font-bold uppercase tracking-wide text-[var(--color-on-surface-muted)]"
+        >
+          Species
+        </label>
+        <select
+          id="species"
+          name="species"
+          defaultValue={d.species ?? "dog"}
+          className="w-full rounded-2xl border-0 bg-[var(--color-surface)] px-3 py-2 text-[var(--color-on-surface)] outline-none ring-2 ring-[color-mix(in_srgb,var(--color-on-surface)_12%,transparent)] focus:ring-[var(--color-secondary-bright)]"
+        >
+          <option value="dog">Dog</option>
+          <option value="cat">Cat</option>
+        </select>
       </div>
       <div className="space-y-2">
         <label

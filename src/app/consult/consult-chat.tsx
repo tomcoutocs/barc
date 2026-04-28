@@ -10,6 +10,8 @@ import {
   Send,
   Shield,
   Lock,
+  ThumbsDown,
+  ThumbsUp,
 } from "lucide-react";
 import {
   useCallback,
@@ -30,6 +32,8 @@ export type ConsultPet = {
   breed: string | null;
   age_years: number | null;
   photo_url: string | null;
+  /** dog | cat — drives vet-rag retrieval */
+  species?: string | null;
 };
 
 export type ConsultMessage = {
@@ -37,6 +41,8 @@ export type ConsultMessage = {
   role: string;
   content: string;
   created_at: string;
+  feedback_rating?: "up" | "down" | null;
+  feedback_at?: string | null;
 };
 
 function triageBubbleClass(level: string): string {
@@ -64,6 +70,91 @@ function TypingIndicator() {
         <span className="consult-typing-dot inline-block h-2 w-2 rounded-full bg-[var(--color-on-surface-muted)]" />
         <span className="consult-typing-dot inline-block h-2 w-2 rounded-full bg-[var(--color-on-surface-muted)]" />
       </div>
+    </div>
+  );
+}
+
+function MessageFeedbackBar({
+  messageId,
+  feedbackRating,
+  onRated,
+}: {
+  messageId: string;
+  feedbackRating: "up" | "down" | null;
+  onRated: (messageId: string, rating: "up" | "down" | null) => void;
+}) {
+  const [rating, setRating] = useState<"up" | "down" | null>(feedbackRating);
+  const [pending, setPending] = useState(false);
+
+  useEffect(() => {
+    setRating(feedbackRating);
+  }, [feedbackRating, messageId]);
+
+  async function vote(next: "up" | "down") {
+    const resolved = rating === next ? null : next;
+    const prev = rating;
+    setRating(resolved);
+    setPending(true);
+    try {
+      const res = await fetch("/api/chat/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messageId, rating: resolved }),
+      });
+      const data = (await res.json()) as { error?: string; feedback_rating?: "up" | "down" | null };
+      if (!res.ok) {
+        setRating(prev);
+        return;
+      }
+      const updated = data.feedback_rating ?? null;
+      setRating(updated);
+      onRated(messageId, updated);
+    } catch {
+      setRating(prev);
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-3 pt-1">
+      <span className="text-[11px] font-bold uppercase tracking-wide text-[var(--color-on-surface-muted)]">
+        Helpful?
+      </span>
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          disabled={pending}
+          aria-label="Thumbs up"
+          aria-pressed={rating === "up"}
+          onClick={() => vote("up")}
+          className={`rounded-xl p-2 transition ${
+            rating === "up"
+              ? "bg-[color-mix(in_srgb,var(--color-tertiary)_28%,transparent)] text-[var(--color-primary)]"
+              : "text-[var(--color-on-surface-muted)] hover:bg-[color-mix(in_srgb,var(--color-on-surface)_8%,transparent)]"
+          } disabled:opacity-50`}
+        >
+          <ThumbsUp className="h-4 w-4" aria-hidden />
+        </button>
+        <button
+          type="button"
+          disabled={pending}
+          aria-label="Thumbs down"
+          aria-pressed={rating === "down"}
+          onClick={() => vote("down")}
+          className={`rounded-xl p-2 transition ${
+            rating === "down"
+              ? "bg-[color-mix(in_srgb,var(--color-secondary)_22%,transparent)] text-[var(--color-secondary)]"
+              : "text-[var(--color-on-surface-muted)] hover:bg-[color-mix(in_srgb,var(--color-on-surface)_8%,transparent)]"
+          } disabled:opacity-50`}
+        >
+          <ThumbsDown className="h-4 w-4" aria-hidden />
+        </button>
+      </div>
+      <span className="max-w-[min(100%,22rem)] text-[10px] leading-snug text-[var(--color-on-surface-muted)]">
+        Your votes shape preference hints on future replies (thumbs up reinforce, thumbs down steer away—not
+        automatic fine-tuning).
+      </span>
     </div>
   );
 }
@@ -191,22 +282,22 @@ function AssistantConsultMessage({
   onStaggerProgress?: () => void;
   onStaggerComplete?: () => void;
 }) {
-  const { structured } = parseStoredAgentContent(content);
+  const { chunks, structured } = useMemo(() => {
+    const parsed = parseStoredAgentContent(content);
+    const ch = parsed.structured
+      ? buildStructuredChunks(parsed.structured)
+      : buildPlainChunks(content);
+    return { chunks: ch, structured: parsed.structured };
+  }, [content]);
+
   const level = structured?.triage_level ?? "low";
+  const totalChunks = chunks.length;
 
-  const chunks = useMemo(() => {
-    if (structured) return buildStructuredChunks(structured);
-    return buildPlainChunks(content);
-  }, [structured, content]);
-
-  const [visibleCount, setVisibleCount] = useState(stagger ? 0 : chunks.length);
+  const [animatedCount, setAnimatedCount] = useState(0);
+  const visibleCount = stagger ? animatedCount : totalChunks;
 
   useEffect(() => {
-    if (!stagger) {
-      setVisibleCount(chunks.length);
-      return;
-    }
-    setVisibleCount(0);
+    if (!stagger) return;
     let cancelled = false;
     const timers: ReturnType<typeof setTimeout>[] = [];
     timers.push(
@@ -215,9 +306,9 @@ function AssistantConsultMessage({
         const showNext = () => {
           if (cancelled) return;
           shown += 1;
-          setVisibleCount(shown);
+          setAnimatedCount(shown);
           onStaggerProgress?.();
-          if (shown >= chunks.length) {
+          if (shown >= totalChunks) {
             onStaggerComplete?.();
             return;
           }
@@ -230,7 +321,7 @@ function AssistantConsultMessage({
       cancelled = true;
       timers.forEach(clearTimeout);
     };
-  }, [stagger, chunks.length, onStaggerProgress, onStaggerComplete]);
+  }, [stagger, totalChunks, onStaggerProgress, onStaggerComplete]);
 
   if (!structured) {
     return (
@@ -296,6 +387,14 @@ export function ConsultChat({
 
   const completeStagger = useCallback(() => {
     setStaggerAssistantId(null);
+  }, []);
+
+  const handleRated = useCallback((messageId: string, rating: "up" | "down" | null) => {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === messageId ? { ...m, feedback_rating: rating } : m,
+      ),
+    );
   }, []);
 
   useEffect(() => {
@@ -376,7 +475,13 @@ export function ConsultChat({
     }
   }
 
-  const placeholderPetName = activePet?.name ?? "your dog";
+  const defaultYourPet =
+    activePet?.species === "cat"
+      ? "your cat"
+      : activePet?.species === "dog"
+        ? "your dog"
+        : "your pet";
+  const placeholderPetName = activePet?.name ?? defaultYourPet;
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-1 gap-8 px-4 py-10 sm:px-6 lg:grid lg:grid-cols-[minmax(0,260px)_1fr]">
@@ -387,7 +492,7 @@ export function ConsultChat({
           </h2>
           {pets.length === 0 ? (
             <p className="mt-4 text-sm text-[var(--color-on-surface-muted)]">
-              Add a dog in{" "}
+              Add a pet in{" "}
               <Link
                 href="/settings/pets/new"
                 className="font-bold text-[var(--color-secondary-bright)] underline"
@@ -401,7 +506,7 @@ export function ConsultChat({
               {pets.map((pet) => {
                 const active = pet.id === (activePetId ?? pets[0]?.id);
                 const detail = [
-                  pet.breed ?? "Dog",
+                  pet.breed ?? (pet.species === "cat" ? "Cat" : "Dog"),
                   pet.age_years != null ? `${pet.age_years}y` : null,
                 ]
                   .filter(Boolean)
@@ -524,13 +629,25 @@ export function ConsultChat({
                   {m.content}
                 </div>
               ) : (
-                <AssistantConsultMessage
-                  key={m.id}
-                  content={m.content}
-                  stagger={m.id === staggerAssistantId}
-                  onStaggerProgress={bumpScroll}
-                  onStaggerComplete={completeStagger}
-                />
+                <div key={m.id} className="flex max-w-[92%] flex-col gap-2">
+                  <AssistantConsultMessage
+                    content={m.content}
+                    stagger={m.id === staggerAssistantId}
+                    onStaggerProgress={bumpScroll}
+                    onStaggerComplete={completeStagger}
+                  />
+                  {!m.id.startsWith("local-") ? (
+                    <MessageFeedbackBar
+                      messageId={m.id}
+                      feedbackRating={
+                        m.feedback_rating === "up" || m.feedback_rating === "down"
+                          ? m.feedback_rating
+                          : null
+                      }
+                      onRated={handleRated}
+                    />
+                  ) : null}
+                </div>
               ),
             )
           )}

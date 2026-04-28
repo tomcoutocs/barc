@@ -4,7 +4,7 @@ CLI runner: crawl/scrape trusted URLs → process_and_ingest (existing chunk/emb
 Usage (from vet-rag-api/, venv active):
   python pipeline_main.py
 
-Bulk Merck dog-owner pages:
+Bulk Merck dog + cat owner pages (same article cap each):
   MERCK_CRAWL_MAX_ARTICLES=500 python pipeline_main.py
 
 Respect each site's Terms of Use and robots.txt; obtain licenses where required.
@@ -21,7 +21,7 @@ if str(_ROOT) not in sys.path:
 
 from app.config import get_settings
 from app.pipeline.process_and_ingest import process_and_ingest
-from app.scrapers.merck_crawl import crawl_merck_dog_owner_articles
+from app.scrapers.merck_crawl import crawl_merck_owner_articles
 from app.scrapers.scrape_dispatch import run_all_scrapers
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -31,9 +31,12 @@ ADDITIONAL_URLS: list[str] = [
     # "https://www.avma.org/...",
 ]
 
-# BFS entry points for Merck dog-owner section (expand if needed).
-MERCK_CRAWL_SEEDS = [
+# BFS entry points for Merck owner sections (expand if needed).
+MERCK_DOG_CRAWL_SEEDS = [
     "https://www.merckvetmanual.com/dog-owners",
+]
+MERCK_CAT_CRAWL_SEEDS = [
+    "https://www.merckvetmanual.com/cat-owners",
 ]
 
 
@@ -51,13 +54,27 @@ def main() -> None:
         delay,
     )
 
-    merck_docs = crawl_merck_dog_owner_articles(
-        MERCK_CRAWL_SEEDS,
+    dog_docs = crawl_merck_owner_articles(
+        MERCK_DOG_CRAWL_SEEDS,
+        owner_segment="dog-owners",
         max_articles=max_art,
         max_visits=max_vis,
         delay_s=delay,
     )
-    log.info("Collected %s Merck article(s) from crawl", len(merck_docs))
+    cat_docs = crawl_merck_owner_articles(
+        MERCK_CAT_CRAWL_SEEDS,
+        owner_segment="cat-owners",
+        max_articles=max_art,
+        max_visits=max_vis,
+        delay_s=delay,
+    )
+    merck_docs = dog_docs + cat_docs
+    log.info(
+        "Collected %s Merck article(s) (dog=%s, cat=%s)",
+        len(merck_docs),
+        len(dog_docs),
+        len(cat_docs),
+    )
 
     extra_docs = run_all_scrapers(ADDITIONAL_URLS, delay_s=delay) if ADDITIONAL_URLS else []
     all_docs = merck_docs + extra_docs

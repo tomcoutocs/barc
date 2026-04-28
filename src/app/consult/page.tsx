@@ -14,7 +14,7 @@ export default async function ConsultPage() {
 
   const { data: pets } = await supabase
     .from("pets")
-    .select("id, name, breed, age_years, photo_url")
+    .select("id, name, breed, age_years, photo_url, species")
     .eq("user_id", user.id)
     .order("created_at", { ascending: true });
 
@@ -36,7 +36,7 @@ export default async function ConsultPage() {
   if (thread) {
     const { data: msgs } = await supabase
       .from("chat_messages")
-      .select("id, role, content, created_at")
+      .select("id, role, content, created_at, feedback_rating, feedback_at")
       .eq("thread_id", thread.id)
       .order("created_at", { ascending: true });
     initialMessages = msgs ?? [];

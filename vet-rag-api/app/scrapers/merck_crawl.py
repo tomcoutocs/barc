@@ -13,50 +13,63 @@ logger = logging.getLogger(__name__)
 
 HOST_MARKER = "merckvetmanual.com"
 
+_SEGMENT_SPECIES: dict[str, str] = {
+    "dog-owners": "dog",
+    "cat-owners": "cat",
+}
 
-def _canonical_dog_owner_url(href: str, base: str) -> str | None:
+
+def _canonical_owner_url(href: str, base: str, segment: str) -> str | None:
+    seg = segment.strip().strip("/").lower()
     full = urljoin(base, href)
     p = urlparse(full)
     host = (p.netloc or "").lower()
     if HOST_MARKER not in host:
         return None
     path = p.path or "/"
-    if not path.lower().startswith("/dog-owners"):
+    prefix = "/" + seg
+    if not path.lower().startswith(prefix):
         return None
     path_norm = "/" + "/".join(x for x in path.split("/") if x)
-    if not path_norm.lower().startswith("/dog-owners"):
+    if not path_norm.lower().startswith(prefix):
         return None
     return urlunparse(("https", "www.merckvetmanual.com", path_norm, "", p.query, ""))
 
 
-def _path_is_article(path: str) -> bool:
+def _path_is_article(path: str, segment: str) -> bool:
     parts = [x for x in (path or "").strip("/").split("/") if x]
-    return len(parts) >= 3 and parts[0].lower() == "dog-owners"
+    seg = segment.strip().strip("/").lower()
+    return len(parts) >= 3 and parts[0].lower() == seg
 
 
-def crawl_merck_dog_owner_articles(
+def crawl_merck_owner_articles(
     seeds: list[str] | None = None,
     *,
+    owner_segment: str = "dog-owners",
     max_articles: int = 200,
     max_visits: int = 4000,
     delay_s: float = 1.0,
 ) -> list[dict]:
     """
-    Breadth-first crawl of merckvetmanual.com/dog-owners/*, extracting one HTML fetch per visit.
-    Collects up to ``max_articles`` article pages (URL depth: /dog-owners/<section>/<page>/...).
+    Breadth-first crawl of merckvetmanual.com/<owner_segment>/* (e.g. dog-owners or cat-owners).
+    Collects up to ``max_articles`` article pages (URL depth: /<segment>/<section>/<page>/...).
+    Each dict includes ``species`` (dog or cat) for downstream metadata.
     """
+    segment = owner_segment.strip().strip("/").lower()
+    species = _SEGMENT_SPECIES.get(segment, "dog")
+
     if seeds is None:
-        seeds = ["https://www.merckvetmanual.com/dog-owners"]
+        seeds = [f"https://www.merckvetmanual.com/{segment}"]
 
     seeds_n: list[str] = []
     for s in seeds:
-        c = _canonical_dog_owner_url(s, s)
+        c = _canonical_owner_url(s, s, segment)
         if c:
             seeds_n.append(c)
-        elif "/dog-owners" in s:
-            seeds_n.append(s.split("#")[0].rstrip("/") or "https://www.merckvetmanual.com/dog-owners")
+        elif f"/{segment}" in s.lower():
+            seeds_n.append(s.split("#")[0].rstrip("/") or f"https://www.merckvetmanual.com/{segment}")
     if not seeds_n:
-        seeds_n = ["https://www.merckvetmanual.com/dog-owners"]
+        seeds_n = [f"https://www.merckvetmanual.com/{segment}"]
 
     articles: list[dict] = []
     visited: set[str] = set()
@@ -76,7 +89,8 @@ def crawl_merck_dog_owner_articles(
         visits += 1
         if visits % 25 == 0:
             logger.info(
-                "merck crawl: visits=%s articles=%s queue=%s",
+                "merck crawl [%s]: visits=%s articles=%s queue=%s",
+                segment,
                 visits,
                 len(articles),
                 len(q),
@@ -90,7 +104,7 @@ def crawl_merck_dog_owner_articles(
             continue
         html = body.decode("utf-8", errors="replace")
         path = urlparse(url).path
-        if _path_is_article(path) and len(articles) < max_articles:
+        if _path_is_article(path, segment) and len(articles) < max_articles:
             title, text = extract_main_text(html, url=url)
             if text.strip():
                 articles.append(
@@ -99,17 +113,41 @@ def crawl_merck_dog_owner_articles(
                         "title": title or url,
                         "raw_text": text,
                         "source_type": "merck",
+                        "species": species,
                     }
                 )
 
         soup = BeautifulSoup(html, "lxml")
         for a in soup.find_all("a", href=True):
-            child = _canonical_dog_owner_url(a["href"], url)
+            child = _canonical_owner_url(a["href"], url, segment)
             if not child or child in visited:
                 continue
             if child not in enqueued:
                 enqueued.add(child)
                 q.append(child)
 
-    logger.info("merck crawl: done visits=%s unique_enqueued=%s articles=%s", visits, len(enqueued), len(articles))
+    logger.info(
+        "merck crawl [%s]: done visits=%s unique_enqueued=%s articles=%s",
+        segment,
+        visits,
+        len(enqueued),
+        len(articles),
+    )
     return articles
+
+
+def crawl_merck_dog_owner_articles(
+    seeds: list[str] | None = None,
+    *,
+    max_articles: int = 200,
+    max_visits: int = 4000,
+    delay_s: float = 1.0,
+) -> list[dict]:
+    """Backward-compatible wrapper for dog-owner Merck crawl."""
+    return crawl_merck_owner_articles(
+        seeds,
+        owner_segment="dog-owners",
+        max_articles=max_articles,
+        max_visits=max_visits,
+        delay_s=delay_s,
+    )

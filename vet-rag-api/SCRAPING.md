@@ -11,7 +11,7 @@ This adds **scraping, cleaning, metadata enrichment, and deduplication** on top 
 | `app/scrapers/guidelines.py` | AAHA / WSAVA / AVMA **PDFs** (bytes → `load_pdf_bytes`) |
 | `app/scrapers/scrape_dispatch.py` | `scrape_one` / `run_all_scrapers` URL routing |
 | `app/utils/cleaner.py` | `clean_text` |
-| `app/utils/metadata.py` | `enrich_metadata` (topic, urgency, authority, `species=dog`) |
+| `app/utils/metadata.py` | `enrich_metadata` (topic, urgency, authority, `species` from scrape: dog/cat) |
 | `app/utils/deduper.py` | SHA-256 fingerprint + **≥300 words** gate |
 | `app/pipeline/ingest_documents.py` | **`ingest_documents([{text, metadata}])`** → existing upsert |
 | `app/pipeline/process_and_ingest.py` | `process_and_ingest(scraped_docs)` |
@@ -29,13 +29,13 @@ pip install -r requirements.txt
 
 ## Run
 
-1. **`pipeline_main.py`** crawls **Merck Veterinary Manual → Dog owners** via BFS from `MERCK_CRAWL_SEEDS` (default hub: `/dog-owners`), up to **`MERCK_CRAWL_MAX_ARTICLES`** article URLs (paths with at least `/dog-owners/<section>/<page>`). Each page is fetched **once** for both link discovery and text extraction.
+1. **`pipeline_main.py`** crawls **Merck Veterinary Manual → Dog owners** and **Cat owners** via BFS from `MERCK_DOG_CRAWL_SEEDS` / `MERCK_CAT_CRAWL_SEEDS`, up to **`MERCK_CRAWL_MAX_ARTICLES`** article URLs **per species** (paths like `/dog-owners/<section>/<page>` and `/cat-owners/<section>/<page>`). Each page is fetched **once** for both link discovery and text extraction.
 2. Add optional **`ADDITIONAL_URLS`** in `pipeline_main.py` for AVMA / AAHA / WSAVA (same as before).
 3. Tune in **`.env.local`**:
 
 | Variable | Meaning |
 |----------|---------|
-| `MERCK_CRAWL_MAX_ARTICLES` | Stop after this many articles (default `2500`) |
+| `MERCK_CRAWL_MAX_ARTICLES` | Stop after this many articles **per species** (dog crawl + cat crawl each use this cap; default `2500`) |
 | `MERCK_CRAWL_MAX_VISITS` | Safety cap on BFS page fetches (default `35000`) |
 | `MERCK_CRAWL_DELAY_S` | Pause between HTTP requests (default `1.0`) |
 
@@ -60,7 +60,7 @@ Logs show crawl progress, skipped documents (short/duplicate), fetch failures (a
     "source": "canonical URL",
     "title": "...",
     "type": "manual | guideline | org",
-    "species": "dog",
+    "species": "dog | cat",
     "topic": "...",
     "urgency": "low | medium | high | emergency",
     "authority_weight": 0.95

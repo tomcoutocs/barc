@@ -31,9 +31,10 @@ def format_response(
     triage_level: str,
     *,
     follow_up_questions: list[str] | None = None,
+    species: str = "dog",
 ) -> FormattedResponse:
     """Validate / coerce model output into the public API shape."""
-    um = _urgency_fallback(triage_level)
+    um = _urgency_fallback(triage_level, species=species)
     if isinstance(llm_raw, dict):
         data = dict(llm_raw)
     else:
@@ -66,7 +67,7 @@ def format_response(
     )
 
 
-def _urgency_fallback(triage_level: str) -> str:
+def _urgency_fallback(triage_level: str, *, species: str = "dog") -> str:
     from app.agent.safety import urgency_message_for_triage
 
-    return urgency_message_for_triage(triage_level)
+    return urgency_message_for_triage(triage_level, species=species)

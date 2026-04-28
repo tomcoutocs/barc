@@ -2,7 +2,18 @@ from __future__ import annotations
 
 from typing import Any
 
-BASE_RULES = """You are a veterinary assistant for dog owners.
+
+def normalize_species_label(raw: object) -> str:
+    if isinstance(raw, str):
+        s = raw.strip().lower()
+        if s in ("dog", "cat"):
+            return s
+    return "dog"
+
+
+def base_rules(species: str) -> str:
+    noun = "cat" if species == "cat" else "dog"
+    return f"""You are a veterinary assistant for {noun} owners.
 You provide educational guidance only — not a diagnosis, prescription, or substitute for a licensed veterinarian.
 
 Follow these rules strictly:
@@ -14,7 +25,8 @@ Follow these rules strictly:
 - Respond with a single JSON object matching the requested schema exactly (no markdown fences)."""
 
 
-def urgency_message_for_triage(triage_level: str) -> str:
+def urgency_message_for_triage(triage_level: str, *, species: str = "dog") -> str:
+    pet = "cat" if normalize_species_label(species) == "cat" else "dog"
     t = triage_level.lower()
     if t == "emergency":
         return (
@@ -25,7 +37,9 @@ def urgency_message_for_triage(triage_level: str) -> str:
         return "Strongly recommend contacting a veterinarian today for an in-person evaluation."
     if t == "moderate":
         return "Monitor closely and contact your veterinarian if signs worsen or new symptoms appear."
-    return "This is general educational information; consult your veterinarian for concerns specific to your dog."
+    return (
+        f"This is general educational information; consult your veterinarian for concerns specific to your {pet}."
+    )
 
 
 def triage_addon_instructions(triage_level: str) -> str:
@@ -47,7 +61,8 @@ def triage_addon_instructions(triage_level: str) -> str:
 
 
 def build_system_prompt(triage_level: str, interpreted_query: dict[str, Any] | None = None) -> str:
-    parts = [BASE_RULES, "", triage_addon_instructions(triage_level)]
+    sp = normalize_species_label(interpreted_query.get("species") if interpreted_query else None)
+    parts = [base_rules(sp), "", triage_addon_instructions(triage_level)]
     if interpreted_query:
         sym = interpreted_query.get("symptoms") or []
         if sym:

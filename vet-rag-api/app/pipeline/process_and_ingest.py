@@ -23,11 +23,19 @@ def process_and_ingest(scraped_docs: list[dict], *, min_words: int = 300) -> int
         raw_text = raw.get("raw_text") or ""
         title = raw.get("title") or ""
         source_type = raw.get("source_type") or "merck"
+        species_raw = raw.get("species")
+        species = str(species_raw).strip().lower() if species_raw else "dog"
         text = clean_text(raw_text)
         if not deduper.accept(text):
             logger.info("process_and_ingest: skip (short or duplicate) url=%s", url)
             continue
-        meta = enrich_metadata(text, source=url, title=title, source_type=str(source_type))
+        meta = enrich_metadata(
+            text,
+            source=url,
+            title=title,
+            source_type=str(source_type),
+            species=species,
+        )
         ingest_documents([{"text": text, "metadata": meta}])
         ingested += 1
     return ingested

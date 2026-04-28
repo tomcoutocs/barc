@@ -67,21 +67,25 @@ def enrich_metadata(
     title: str,
     *,
     source_type: str,
+    species: str = "dog",
 ) -> dict:
     """
-    Build the ingestion metadata object (species fixed to dog per pipeline spec).
+    Build the ingestion metadata object (species typically dog or cat from scrape).
     """
     st = source_type.lower().strip()
     topic = infer_topic(text)
     urgency = infer_urgency(text)
     authority = _AUTHORITY_BY_SOURCE.get(st, 0.85)
     doc_type = _TYPE_BY_SOURCE.get(st, "manual")
+    sp = (species or "dog").strip().lower()
+    if sp not in ("dog", "cat"):
+        sp = "dog"
 
     return {
         "source": source,
         "title": title.strip() or source,
         "type": doc_type,
-        "species": "dog",
+        "species": sp,
         "topic": topic,
         "urgency": urgency,
         "authority_weight": authority,
