@@ -11,6 +11,7 @@ from app.agent.safety import (
     normalize_species_label,
     urgency_message_for_triage,
 )
+from app.agent.triage import should_clarify_before_detail
 from app.config import get_settings
 
 _JSON_INSTRUCTION_BASE = """
@@ -33,6 +34,17 @@ Avoid repeating mistakes from the downvote list; prefer qualities from the upvot
 
 def _json_instruction(*, include_feedback_hints: bool) -> str:
     return _JSON_INSTRUCTION_BASE + (_JSON_HINT_SUFFIX if include_feedback_hints else "")
+
+
+_CLARIFICATION_FIRST_SUFFIX = """
+
+CLARIFICATION_FIRST is active: the clinical picture from the user message is thin or key details are missing.
+- Lead the "summary" with a brief empathetic line, then say you need a few specifics before narrowing advice. Do not write a long generic encyclopedia-style answer.
+- Keep "possible_causes" to at most one broad educational line, OR use an empty array if listing possibilities would be misleading without more detail.
+- Keep "what_to_monitor" to 1-3 universal red-flag signs for this species (or omit if none fit).
+- Put 3-5 precise, answerable questions for the OWNER as the FIRST entries in "recommended_action" (short, one question per bullet). Only after those, add any safe general steps if needed.
+- Still honor triage: if something could be urgent, say so plainly in the summary and urgency_message.
+"""
 
 
 def _context_block(chunks: list[dict[str, Any]], max_chars: int = 12000) -> str:
@@ -78,14 +90,20 @@ def generate_response(
     system = build_system_prompt(triage_level, interpreted_query)
     urgency_hint = urgency_message_for_triage(triage_level, species=sp)
     hints = (preference_hints or "").strip()
+    clarify_first = should_clarify_before_detail(interpreted_query, triage_level)
+    output_instructions = _json_instruction(include_feedback_hints=bool(hints))
+    if clarify_first:
+        output_instructions += _CLARIFICATION_FIRST_SUFFIX
+
     user_payload = {
         "user_message": user_input,
         "interpreted": interpreted_query,
         "triage_level": triage_level,
+        "CLARIFICATION_FIRST": clarify_first,
         "URGENCY_HINT": urgency_hint,
         "RETRIEVED_CONTEXT": _context_block(context),
         "PREFERENCE_HINTS": hints,
-        "output_instructions": _json_instruction(include_feedback_hints=bool(hints)),
+        "output_instructions": output_instructions,
     }
 
     resp = client.chat.completions.create(

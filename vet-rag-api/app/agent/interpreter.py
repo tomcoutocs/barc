@@ -92,6 +92,7 @@ def interpret_query(user_input: str, *, species: str = "dog") -> dict[str, Any]:
         normalized = f"General {sp} owner question: {text}"
 
     return {
+        "user_text": text,
         "normalized_query": normalized,
         "symptoms": symptoms,
         "duration": duration,

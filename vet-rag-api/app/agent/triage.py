@@ -74,6 +74,37 @@ def classify_triage(interpreted_query: dict[str, Any]) -> TriageLevel:
     return "moderate"
 
 
+def should_clarify_before_detail(interpreted_query: dict[str, Any], triage_level: str) -> bool:
+    """
+    True when the user's message is too thin to tailor guidance safely — prioritize
+    targeted questions over a long generic essay (emergency/high still get urgent guidance).
+    """
+    if triage_level in ("emergency", "high"):
+        return False
+
+    user_text = (interpreted_query.get("user_text") or interpreted_query.get("normalized_query") or "").strip()
+    if not user_text:
+        return False
+    user_lower = user_text.lower()
+
+    if _GENERAL_INFO.search(user_lower):
+        return False
+
+    symptoms: list[str] = list(interpreted_query.get("symptoms") or [])
+    toxins: list[str] = list(interpreted_query.get("suspected_toxins") or [])
+    if toxins:
+        return False
+
+    if not symptoms:
+        return True
+
+    word_count = len(user_text.split())
+    if interpreted_query.get("duration") is None and word_count < 28:
+        return True
+
+    return False
+
+
 def generate_followup_questions(interpreted_query: dict[str, Any]) -> list[str]:
     """Ask only for gaps that change triage or guidance."""
     pet = "cat" if interpreted_query.get("species") == "cat" else "dog"

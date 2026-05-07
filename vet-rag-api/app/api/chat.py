@@ -10,7 +10,11 @@ from app.agent.formatter import FormattedResponse, format_response
 from app.agent.interpreter import interpret_query
 from app.agent.responder import generate_response
 from app.agent.safety import normalize_species_label, urgency_message_for_triage
-from app.agent.triage import classify_triage, generate_followup_questions
+from app.agent.triage import (
+    classify_triage,
+    generate_followup_questions,
+    should_clarify_before_detail,
+)
 
 router = APIRouter(tags=["agent"])
 logger = logging.getLogger(__name__)
@@ -32,6 +36,7 @@ def chat(req: ChatRequest) -> FormattedResponse:
     interpreted = interpret_query(req.message, species=species)
     triage = classify_triage(interpreted)
     followups = generate_followup_questions(interpreted)
+    clarification_first = should_clarify_before_detail(interpreted, triage)
     pet_word = "cat" if species == "cat" else "dog"
 
     try:
@@ -41,7 +46,13 @@ def chat(req: ChatRequest) -> FormattedResponse:
             interpreted,
             preference_hints=req.preference_hints,
         )
-        out = format_response(raw, triage, follow_up_questions=followups, species=species)
+        out = format_response(
+            raw,
+            triage,
+            follow_up_questions=None if clarification_first else followups,
+            species=species,
+            clarification_first=clarification_first,
+        )
     except Exception:
         logger.exception("chat generation failed")
 

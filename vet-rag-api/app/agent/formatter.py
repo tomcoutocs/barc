@@ -32,6 +32,7 @@ def format_response(
     *,
     follow_up_questions: list[str] | None = None,
     species: str = "dog",
+    clarification_first: bool = False,
 ) -> FormattedResponse:
     """Validate / coerce model output into the public API shape."""
     um = _urgency_fallback(triage_level, species=species)
@@ -55,7 +56,8 @@ def format_response(
 
     rec = [str(x) for x in (data.get("recommended_action") or []) if str(x).strip()]
     if follow_up_questions:
-        rec = [f"(Your vet may ask) {q}" for q in follow_up_questions] + rec
+        prefix = "To help narrow this down: " if clarification_first else "(Your vet may ask) "
+        rec = [f"{prefix}{q}" for q in follow_up_questions] + rec
 
     return FormattedResponse(
         triage_level=tl,  # type: ignore[arg-type]
