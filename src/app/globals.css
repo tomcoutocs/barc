@@ -1,4 +1,6 @@
-@import "tailwindcss";
+@import "tailwindcss" source("../../");
+/* Explicit source tree for Linux/Vercel builds (cwd differs from dev); ensures App Router pages are scanned */
+@source "../../src/**/*.{js,ts,jsx,tsx,mdx}";
 
 :root {
   /* DESIGN.md — Midnight Forest & Terracotta */
