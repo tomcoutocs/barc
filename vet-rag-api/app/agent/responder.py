@@ -38,11 +38,13 @@ def _json_instruction(*, include_feedback_hints: bool) -> str:
 
 _CLARIFICATION_FIRST_SUFFIX = """
 
-CLARIFICATION_FIRST is active: the clinical picture from the user message is thin or key details are missing.
-- Lead the "summary" with a brief empathetic line, then say you need a few specifics before narrowing advice. Do not write a long generic encyclopedia-style answer.
-- Keep "possible_causes" to at most one broad educational line, OR use an empty array if listing possibilities would be misleading without more detail.
-- Keep "what_to_monitor" to 1-3 universal red-flag signs for this species (or omit if none fit).
-- Put 3-5 precise, answerable questions for the OWNER as the FIRST entries in "recommended_action" (short, one question per bullet). Only after those, add any safe general steps if needed.
+CLARIFICATION_FIRST is active: the clinical picture is thin or key details are missing.
+- Conversation may include CONVERSATION (prior turns): read it. Do NOT repeat questions the owner already answered; acknowledge what they shared in one clause, then move on.
+- Lead the "summary" with a brief empathetic line, then ask EXACTLY ONE precise, answerable follow-up question in the SAME paragraph (natural language). Wait for their reply—you do NOT have their next replies yet.
+- Do NOT bundle multiple questions, numbered lists of questions, or "first / second / third" question drills. Maximum one question mark that seeks new information total in summary + bullets.
+- Keep "possible_causes" empty or one very broad phrase only if harmless; omit detailed differentials until you have specifics.
+- Keep "what_to_monitor" to 0-3 universal red-flag signs for this species (optional).
+- Keep "recommended_action" to SAFE general steps ONLY (hydration, rest, observe, when to contact a vet)—no question bullets. The single clarification question MUST live only in "summary".
 - Still honor triage: if something could be urgent, say so plainly in the summary and urgency_message.
 """
 
@@ -68,6 +70,7 @@ def generate_response(
     *,
     preference_hints: str | None = None,
     context: list[dict[str, Any]] | None = None,
+    conversation_plain: str | None = None,
 ) -> str:
     """
     Call OpenAI with RAG context and safety-first system prompt.
@@ -95,6 +98,7 @@ def generate_response(
     if clarify_first:
         output_instructions += _CLARIFICATION_FIRST_SUFFIX
 
+    conv = (conversation_plain or "").strip()
     user_payload = {
         "user_message": user_input,
         "interpreted": interpreted_query,
@@ -102,6 +106,7 @@ def generate_response(
         "CLARIFICATION_FIRST": clarify_first,
         "URGENCY_HINT": urgency_hint,
         "RETRIEVED_CONTEXT": _context_block(context),
+        "CONVERSATION": conv if conv else None,
         "PREFERENCE_HINTS": hints,
         "output_instructions": output_instructions,
     }

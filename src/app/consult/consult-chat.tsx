@@ -48,20 +48,20 @@ export type ConsultMessage = {
 function triageBubbleClass(level: string): string {
   switch (level) {
     case "emergency":
-      return "border-[color-mix(in_srgb,var(--color-secondary)_50%,transparent)] bg-[color-mix(in_srgb,var(--color-secondary)_10%,var(--color-surface))]";
+      return "consult-triage-emergency";
     case "high":
-      return "border-[color-mix(in_srgb,var(--color-tertiary)_45%,transparent)] bg-[color-mix(in_srgb,var(--color-tertiary)_8%,var(--color-surface))]";
+      return "consult-triage-high";
     case "moderate":
-      return "border-[color-mix(in_srgb,var(--color-primary)_30%,transparent)] bg-[var(--color-surface)]";
+      return "consult-triage-moderate";
     default:
-      return "border-[color-mix(in_srgb,var(--color-on-surface)_14%,transparent)] bg-[var(--color-surface)]";
+      return "consult-triage-low";
   }
 }
 
 function TypingIndicator() {
   return (
     <div
-      className="max-w-[92%] rounded-3xl rounded-bl-md border border-[color-mix(in_srgb,var(--color-on-surface)_12%,transparent)] bg-[var(--color-surface)] px-5 py-4 shadow-[var(--shadow-float)]"
+      className="consult-typing-bubble-shell max-w-[92%] rounded-3xl rounded-bl-md border bg-[var(--color-surface)] px-5 py-4 shadow-[var(--shadow-float)]"
       role="status"
       aria-label="Assistant is typing"
     >

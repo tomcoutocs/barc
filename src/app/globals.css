@@ -1,4 +1,5 @@
-@import "tailwindcss";
+/* Relative path avoids resolving the `tailwindcss` package from Turbopack’s wrong workspace root */
+@import "../../node_modules/tailwindcss/index.css";
 
 :root {
   /* DESIGN.md — Midnight Forest & Terracotta */
@@ -28,6 +29,32 @@
   --color-on-primary: var(--color-on-primary);
   --color-on-surface: var(--color-on-surface);
   --font-sans: var(--font-manrope);
+}
+
+/*
+ * Explicit utilities: Tailwind arbitrary `border-[color-mix(in_srgb,...)]` values confuse the CSS
+ * optimizer (bad tokenization around `var(--color-*)`), so borders use plain CSS here.
+ */
+@layer utilities {
+  .consult-triage-emergency {
+    border-color: color-mix(in srgb, var(--color-secondary) 50%, transparent);
+    background-color: color-mix(in srgb, var(--color-secondary) 10%, var(--color-surface));
+  }
+  .consult-triage-high {
+    border-color: color-mix(in srgb, var(--color-tertiary) 45%, transparent);
+    background-color: color-mix(in srgb, var(--color-tertiary) 8%, var(--color-surface));
+  }
+  .consult-triage-moderate {
+    border-color: color-mix(in srgb, var(--color-primary) 30%, transparent);
+    background-color: var(--color-surface);
+  }
+  .consult-triage-low {
+    border-color: color-mix(in srgb, var(--color-on-surface) 14%, transparent);
+    background-color: var(--color-surface);
+  }
+  .consult-typing-bubble-shell {
+    border-color: color-mix(in srgb, var(--color-on-surface) 12%, transparent);
+  }
 }
 
 body {

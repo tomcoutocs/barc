@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { fetchFeedbackHintsForUser } from "@/lib/chat-feedback-hints";
 import type { ConsultAgentResponse } from "@/types/consult-agent";
-import { formatAgentForStorage } from "@/types/consult-agent";
+import { formatAgentForStorage, parseStoredAgentContent } from "@/types/consult-agent";
 
 /** Vercel serverless limit (seconds). Pro (or higher) can use long RAG calls; Hobby plans enforce a lower cap—see Vercel docs. */
 export const maxDuration = 120;
@@ -13,16 +13,32 @@ type Body = {
   content: string;
 };
 
+type ConversationTurnPayload = { role: "user" | "assistant"; content: string };
+
+/** Match vet-rag-api cap (see ``_MAX_CONVERSATION_TURNS``). */
+const CONVERSATION_HISTORY_MAX_TURNS = 32;
+
+const ASSISTANT_CONTEXT_CHAR_CAP = 2_800;
+const USER_CONTEXT_CHAR_CAP = 6_000;
+const FALLBACK_CHAT_HISTORY_MESSAGES = 16;
+
+function assistantPlainForAgentContext(raw: string): string {
+  const { fallbackText } = parseStoredAgentContent(raw);
+  const base = (fallbackText || "").trim() || raw.trim();
+  return base.slice(0, ASSISTANT_CONTEXT_CHAR_CAP).trimEnd();
+}
+
 async function generateAssistantReply(
-  userMessage: string,
+  latestUserContent: string,
   preferenceHints: string | null,
+  priorTurns?: ConversationTurnPayload[],
 ): Promise<string> {
   const key = process.env.OPENAI_API_KEY;
   if (!key) {
     return [
       "This is a demo reply. Add OPENAI_API_KEY on the server for live AI.",
       "",
-      `You said: ${userMessage.slice(0, 280)}${userMessage.length > 280 ? "…" : ""}`,
+      `You said: ${latestUserContent.slice(0, 280)}${latestUserContent.length > 280 ? "…" : ""}`,
       "",
       "Barc does not replace an in-person veterinarian. Seek urgent care for emergencies.",
     ].join("\n");
@@ -32,6 +48,33 @@ async function generateAssistantReply(
     ? `\n\nUser feedback (thumbs up and thumbs down on past replies—reinforce what worked, avoid what did not; still follow safety): ${preferenceHints.trim()}`
     : "";
 
+  const systemPrompt =
+    "You are Barc, a careful veterinary information assistant for dog and cat owners. " +
+    "Conversation history may precede this turn: use it—do not re-ask what the owner already answered. " +
+    "When the picture is vague or missing key details (symptoms, timeline, context), ask ONE specific, answerable follow-up question and wait—you do not have their replies to later questions yet. " +
+    "Do not paste numbered lists or several questions at once. " +
+    "For clear emergencies, give urgent guidance immediately. When you have enough detail, give concise, empathetic guidance. " +
+    "Remind owners you are not a substitute for an in-person exam. If symptoms sound severe, urge emergency care." +
+    hintBlock;
+
+  type ChatMsg = {
+    role: "system" | "user" | "assistant";
+    content: string;
+  };
+  const messages: ChatMsg[] = [{ role: "system", content: systemPrompt }];
+
+  if (priorTurns?.length) {
+    const tail = priorTurns.slice(-FALLBACK_CHAT_HISTORY_MESSAGES);
+    for (const t of tail) {
+      if (t.role !== "assistant" && t.role !== "user") continue;
+      const c = (t.content || "").trim();
+      if (!c) continue;
+      messages.push({ role: t.role, content: c });
+    }
+  }
+
+  messages.push({ role: "user", content: latestUserContent });
+
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -40,15 +83,7 @@ async function generateAssistantReply(
     },
     body: JSON.stringify({
       model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are Barc, a careful veterinary information assistant. When the user’s question is vague or missing key details (no clear symptoms, timeline, age/size, or context), ask 2–5 specific, answerable follow-up questions first and keep general info brief until they reply — except for clear emergencies, where you give urgent guidance immediately. When you have enough detail, give practical, empathetic guidance. Always remind users you are not a substitute for an in-person exam. If symptoms sound severe, urge emergency care." +
-            hintBlock,
-        },
-        { role: "user", content: userMessage },
-      ],
+      messages,
       max_tokens: 600,
     }),
   });
@@ -69,6 +104,7 @@ async function callVetRagAgent(
   message: string,
   species: "dog" | "cat",
   preferenceHints: string | null,
+  conversationHistory: ConversationTurnPayload[] | undefined,
 ): Promise<ConsultAgentResponse | null> {
   const base = process.env.VET_RAG_API_URL?.replace(/\/$/, "").trim();
   if (!base) return null;
@@ -89,6 +125,7 @@ async function callVetRagAgent(
         message,
         species,
         preference_hints: preferenceHints?.trim() || null,
+        conversation_history: conversationHistory?.length ? conversationHistory : null,
       }),
       cache: "no-store",
       signal: AbortSignal.timeout(120_000),
@@ -205,15 +242,60 @@ export async function POST(request: Request) {
     );
   }
 
+  let conversationHistory: ConversationTurnPayload[] | undefined;
+
+  const { data: threadRows } = await supabase
+    .from("chat_messages")
+    .select("role, content")
+    .eq("thread_id", threadId)
+    .order("created_at", { ascending: true })
+    .limit(60);
+
+  if (threadRows && threadRows.length >= 2) {
+    const last = threadRows[threadRows.length - 1];
+    if (last?.role !== "user") {
+      conversationHistory = undefined;
+    } else {
+      const prior = threadRows.slice(0, -1);
+      const turns: ConversationTurnPayload[] = [];
+      for (const row of prior) {
+        const roleRaw = typeof row.role === "string" ? row.role.trim() : "";
+        if (roleRaw !== "user" && roleRaw !== "assistant") continue;
+        if (typeof row.content !== "string") continue;
+
+        let text = row.content.trim();
+        if (!text) continue;
+        if (roleRaw === "user") text = text.slice(0, USER_CONTEXT_CHAR_CAP);
+        else text = assistantPlainForAgentContext(text);
+
+        if (!text.trim()) continue;
+        turns.push({ role: roleRaw, content: text });
+      }
+      conversationHistory =
+        turns.length > CONVERSATION_HISTORY_MAX_TURNS
+          ? turns.slice(-CONVERSATION_HISTORY_MAX_TURNS)
+          : turns;
+    }
+  }
+
   let assistantText: string;
   let agentResponse: ConsultAgentResponse | null = null;
 
-  const agent = await callVetRagAgent(ragMessage, ragSpecies, preferenceHints);
+  const agent = await callVetRagAgent(
+    ragMessage,
+    ragSpecies,
+    preferenceHints,
+    conversationHistory,
+  );
   if (agent) {
     agentResponse = agent;
     assistantText = formatAgentForStorage(agent);
   } else {
-    assistantText = await generateAssistantReply(ragMessage, preferenceHints);
+    assistantText = await generateAssistantReply(
+      ragMessage,
+      preferenceHints,
+      conversationHistory,
+    );
   }
 
   const { data: assistantRow, error: aErr } = await supabase
