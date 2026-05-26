@@ -5,7 +5,7 @@ from typing import Any
 
 from openai import OpenAI
 
-from app.agent.rag_client import retrieve_context
+from app.agent.rag_client import retrieve_context_deep
 from app.agent.safety import (
     build_system_prompt,
     normalize_species_label,
@@ -17,13 +17,13 @@ from app.config import get_settings
 _JSON_INSTRUCTION_BASE = """
 Return a single JSON object with exactly these keys:
 - "triage_level": one of "emergency", "high", "moderate", "low" (must match the triage we provide)
-- "summary": 2-4 short sentences, plain language
-- "possible_causes": array of short bullet strings (educational possibilities, not diagnoses)
-- "what_to_monitor": array of short bullet strings (signs that should prompt vet contact)
-- "recommended_action": array of short bullet strings (safe, practical steps; vet visit when appropriate)
-- "urgency_message": one string; must align with triage (use the URGENCY_HINT we provide as a guide)
+- "summary": 1-2 short sentences max, conversational; lead with empathy then the key takeaway
+- "possible_causes": array of short bullets (educational possibilities, not diagnoses). When RETRIEVED CONTEXT supports it, each bullet should pair a plausible cause with why it might fit this case (sign pattern, timing, species). Order most likely first; omit guesses the context does not support.
+- "what_to_monitor": array of short bullets (specific signs that should prompt vet contact soon)
+- "recommended_action": array of short bullets (safe, practical steps; vet visit when appropriate)
+- "urgency_message": one short string; must align with triage (use the URGENCY_HINT we provide as a guide)
 
-Use short bullets. No markdown. No medication dosages.
+Use short bullets (one line each). No markdown. No medication dosages. Prefer 2-4 items per list unless emergency detail is essential.
 """
 
 _JSON_HINT_SUFFIX = """
@@ -40,7 +40,7 @@ _CLARIFICATION_FIRST_SUFFIX = """
 
 CLARIFICATION_FIRST is active: the clinical picture is thin or key details are missing.
 - Conversation may include CONVERSATION (prior turns): read it. Do NOT repeat questions the owner already answered; acknowledge what they shared in one clause, then move on.
-- Lead the "summary" with a brief empathetic line, then ask EXACTLY ONE precise, answerable follow-up question in the SAME paragraph (natural language). Wait for their reply—you do NOT have their next replies yet.
+- Lead the "summary" with one warm, brief line (casual tone), then ask EXACTLY ONE precise, answerable follow-up question in the SAME short paragraph. Wait for their reply—you do NOT have their next replies yet.
 - Do NOT bundle multiple questions, numbered lists of questions, or "first / second / third" question drills. Maximum one question mark that seeks new information total in summary + bullets.
 - Keep "possible_causes" empty or one very broad phrase only if harmless; omit detailed differentials until you have specifics.
 - Keep "what_to_monitor" to 0-3 universal red-flag signs for this species (optional).
@@ -49,7 +49,7 @@ CLARIFICATION_FIRST is active: the clinical picture is thin or key details are m
 """
 
 
-def _context_block(chunks: list[dict[str, Any]], max_chars: int = 12000) -> str:
+def _context_block(chunks: list[dict[str, Any]], max_chars: int = 14000) -> str:
     lines: list[str] = []
     n = 0
     for i, c in enumerate(chunks, 1):
@@ -74,7 +74,7 @@ def generate_response(
 ) -> str:
     """
     Call OpenAI with RAG context and safety-first system prompt.
-    If ``context`` is None, retrieves via ``retrieve_context(interpreted_query['normalized_query'])``.
+    If ``context`` is None, retrieves via multi-query ``retrieve_context_deep(interpreted_query)``.
     Returns raw JSON string from the model.
     """
     settings = get_settings()
@@ -84,10 +84,7 @@ def generate_response(
     sp = normalize_species_label(interpreted_query.get("species"))
 
     if context is None:
-        context = retrieve_context(
-            interpreted_query.get("normalized_query") or user_input,
-            species=sp,
-        )
+        context = retrieve_context_deep(interpreted_query, species=sp)
 
     client = OpenAI(api_key=settings.openai_api_key)
     system = build_system_prompt(triage_level, interpreted_query)
@@ -113,7 +110,7 @@ def generate_response(
 
     resp = client.chat.completions.create(
         model=settings.openai_chat_model,
-        temperature=0.35,
+        temperature=0.42,
         response_format={"type": "json_object"},
         messages=[
             {"role": "system", "content": system},

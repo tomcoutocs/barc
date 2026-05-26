@@ -58,7 +58,7 @@ def format_response(
     if follow_up_questions:
         # One follow-up question per assistant turn keeps the dialogue focused.
         follow_up_questions = follow_up_questions[:1]
-        prefix = "To help narrow this down: " if clarification_first else "(Your vet may ask) "
+        prefix = "Quick question — " if clarification_first else "Your vet might ask: "
         rec = [f"{prefix}{q}" for q in follow_up_questions] + rec
 
     return FormattedResponse(

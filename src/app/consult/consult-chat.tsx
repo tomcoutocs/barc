@@ -161,13 +161,41 @@ function MessageFeedbackBar({
 
 type BubbleChunk = { key: string; children: ReactNode };
 
-function buildStructuredChunks(a: ConsultAgentResponse): BubbleChunk[] {
+function petLabel(species?: string | null): { noun: string } {
+  if (species === "cat") return { noun: "cat" };
+  return { noun: "dog" };
+}
+
+function splitSummarySentences(summary: string, max = 3): string[] {
+  const trimmed = summary.trim();
+  if (!trimmed) return [];
+  const parts =
+    trimmed.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.map((s) => s.trim()).filter(Boolean) ??
+    [];
+  if (parts.length <= 1) return [trimmed];
+  return parts.slice(0, max);
+}
+
+function buildStructuredChunks(
+  a: ConsultAgentResponse,
+  species?: string | null,
+): BubbleChunk[] {
+  const { noun } = petLabel(species);
   const chunks: BubbleChunk[] = [
     {
-      key: "intro",
+      key: "hello",
+      children: (
+        <p className="text-sm leading-relaxed text-[var(--color-on-surface-muted)]">
+          Got it — I’ll break this into a few quick notes so it’s easier to skim.
+          Educational only, not a diagnosis for your {noun}.
+        </p>
+      ),
+    },
+    {
+      key: "triage",
       children: (
         <>
-          <div className="flex flex-wrap items-center gap-2 border-b border-[color-mix(in_srgb,var(--color-on-surface)_10%,transparent)] pb-3">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full bg-[var(--color-primary-container)] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--color-on-primary)]">
               {a.triage_level}
             </span>
@@ -178,80 +206,71 @@ function buildStructuredChunks(a: ConsultAgentResponse): BubbleChunk[] {
               />
             ) : null}
           </div>
-          <p className="mt-3 text-sm leading-relaxed text-[var(--color-on-surface-muted)]">
-            Thanks for sharing—I’ve laid this out in a few short messages so it’s
-            easier to read. This is educational only, not a diagnosis for your dog.
+          <p className="mt-3 font-bold leading-snug text-[var(--color-secondary)]">
+            {a.urgency_message}
           </p>
-          <p className="mt-3 font-bold text-[var(--color-secondary)]">{a.urgency_message}</p>
-          <p className="mt-3 leading-relaxed">{a.summary}</p>
         </>
       ),
     },
   ];
 
+  for (const [i, sentence] of splitSummarySentences(a.summary).entries()) {
+    chunks.push({
+      key: `summary-${i}`,
+      children: <p className="leading-relaxed">{sentence}</p>,
+    });
+  }
+
   if (a.possible_causes.length > 0) {
     chunks.push({
-      key: "causes",
+      key: "causes-intro",
       children: (
-        <>
-          <p className="text-xs font-bold uppercase tracking-wide text-[var(--color-on-surface-muted)]">
-            Possible angles to discuss with your vet
-          </p>
-          <p className="mt-1 text-xs leading-relaxed text-[var(--color-on-surface-muted)]">
-            Vets sometimes think about themes like these—they’re general ideas, not
-            what’s definitely going on with your pup.
-          </p>
-          <ul className="mt-3 list-inside list-disc space-y-1.5 leading-relaxed">
-            {a.possible_causes.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
-        </>
+        <p className="text-sm leading-relaxed text-[var(--color-on-surface-muted)]">
+          A few things vets sometimes explore with signs like these — ideas from our
+          training sources, not what’s definitely going on with your {noun}:
+        </p>
       ),
     });
+    for (const [i, item] of a.possible_causes.entries()) {
+      chunks.push({
+        key: `cause-${i}`,
+        children: <p className="leading-relaxed">{item}</p>,
+      });
+    }
   }
 
   if (a.what_to_monitor.length > 0) {
     chunks.push({
-      key: "monitor",
+      key: "monitor-intro",
       children: (
-        <>
-          <p className="text-xs font-bold uppercase tracking-wide text-[var(--color-on-surface-muted)]">
-            What I’d keep an eye on
-          </p>
-          <p className="mt-1 text-xs text-[var(--color-on-surface-muted)]">
-            If any of these show up or get worse, it’s worth looping your clinic in
-            sooner.
-          </p>
-          <ul className="mt-3 list-inside list-disc space-y-1.5 leading-relaxed">
-            {a.what_to_monitor.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
-        </>
+        <p className="text-sm font-semibold text-[var(--color-on-surface)]">
+          What I’d watch for
+        </p>
       ),
     });
+    for (const [i, item] of a.what_to_monitor.entries()) {
+      chunks.push({
+        key: `monitor-${i}`,
+        children: <p className="leading-relaxed">{item}</p>,
+      });
+    }
   }
 
   if (a.recommended_action.length > 0) {
     chunks.push({
-      key: "actions",
+      key: "actions-intro",
       children: (
-        <>
-          <p className="text-xs font-bold uppercase tracking-wide text-[var(--color-on-surface-muted)]">
-            Practical next steps
-          </p>
-          <p className="mt-1 text-xs text-[var(--color-on-surface-muted)]">
-            Gentle, general suggestions—your vet can tailor these to your dog.
-          </p>
-          <ul className="mt-3 list-inside list-disc space-y-1.5 leading-relaxed">
-            {a.recommended_action.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
-        </>
+        <p className="text-sm font-semibold text-[var(--color-on-surface)]">
+          Practical next steps
+        </p>
       ),
     });
+    for (const [i, item] of a.recommended_action.entries()) {
+      chunks.push({
+        key: `action-${i}`,
+        children: <p className="leading-relaxed">{item}</p>,
+      });
+    }
   }
 
   return chunks;
@@ -273,11 +292,13 @@ function buildPlainChunks(content: string): BubbleChunk[] {
 
 function AssistantConsultMessage({
   content,
+  species,
   stagger,
   onStaggerProgress,
   onStaggerComplete,
 }: {
   content: string;
+  species?: string | null;
   stagger?: boolean;
   onStaggerProgress?: () => void;
   onStaggerComplete?: () => void;
@@ -285,10 +306,10 @@ function AssistantConsultMessage({
   const { chunks, structured } = useMemo(() => {
     const parsed = parseStoredAgentContent(content);
     const ch = parsed.structured
-      ? buildStructuredChunks(parsed.structured)
+      ? buildStructuredChunks(parsed.structured, species)
       : buildPlainChunks(content);
     return { chunks: ch, structured: parsed.structured };
-  }, [content]);
+  }, [content, species]);
 
   const level = structured?.triage_level ?? "low";
   const totalChunks = chunks.length;
@@ -312,10 +333,10 @@ function AssistantConsultMessage({
             onStaggerComplete?.();
             return;
           }
-          timers.push(setTimeout(showNext, 520));
+          timers.push(setTimeout(showNext, 400));
         };
         showNext();
-      }, 420),
+      }, 320),
     );
     return () => {
       cancelled = true;
@@ -632,6 +653,7 @@ export function ConsultChat({
                 <div key={m.id} className="flex max-w-[92%] flex-col gap-2">
                   <AssistantConsultMessage
                     content={m.content}
+                    species={activePet?.species}
                     stagger={m.id === staggerAssistantId}
                     onStaggerProgress={bumpScroll}
                     onStaggerComplete={completeStagger}
