@@ -11,10 +11,12 @@ from app.agent.safety import (
     normalize_species_label,
     urgency_message_for_triage,
 )
-from app.agent.triage import should_clarify_before_detail
+from app.agent.triage import assess_investigation, generate_followup_questions
 from app.config import get_settings
 
 _JSON_INSTRUCTION_BASE = """
+INVESTIGATION_COMPLETE is true: you may give a full, grounded recommendation.
+
 Return a single JSON object with exactly these keys:
 - "triage_level": one of "emergency", "high", "moderate", "low" (must match the triage we provide)
 - "summary": 1-2 short sentences max, conversational; lead with empathy then the key takeaway
@@ -36,16 +38,18 @@ def _json_instruction(*, include_feedback_hints: bool) -> str:
     return _JSON_INSTRUCTION_BASE + (_JSON_HINT_SUFFIX if include_feedback_hints else "")
 
 
-_CLARIFICATION_FIRST_SUFFIX = """
+_INVESTIGATION_MODE_SUFFIX = """
 
-CLARIFICATION_FIRST is active: the clinical picture is thin or key details are missing.
-- Conversation may include CONVERSATION (prior turns): read it. Do NOT repeat questions the owner already answered; acknowledge what they shared in one clause, then move on.
-- Lead the "summary" with one warm, brief line (casual tone), then ask EXACTLY ONE precise, answerable follow-up question in the SAME short paragraph. Wait for their reply—you do NOT have their next replies yet.
-- Do NOT bundle multiple questions, numbered lists of questions, or "first / second / third" question drills. Maximum one question mark that seeks new information total in summary + bullets.
-- Keep "possible_causes" empty or one very broad phrase only if harmless; omit detailed differentials until you have specifics.
-- Keep "what_to_monitor" to 0-3 universal red-flag signs for this species (optional).
-- Keep "recommended_action" to SAFE general steps ONLY (hydration, rest, observe, when to contact a vet)—no question bullets. The single clarification question MUST live only in "summary".
-- Still honor triage: if something could be urgent, say so plainly in the summary and urgency_message.
+INVESTIGATION_MODE is active — act like a vet taking a history, not closing the case yet.
+- OWNER_TURN_COUNT and MIN_TURNS_BEFORE_RECOMMENDATION show how early you are; do NOT jump to a diagnosis or full action plan until investigation is complete.
+- CONVERSATION has prior turns: read them. Reflect back one specific detail they shared (shows you listened), then ask EXACTLY ONE new, granular question in "summary".
+- Pick the question from MISSING_TOPICS / SUGGESTED_QUESTION_FOCUS if provided; otherwise choose the highest-yield gap (timing, progression, appetite, exposure, symptom-specific detail).
+- Do NOT bundle multiple questions, numbered lists, or "also tell me about…" add-ons. One question mark seeking new info in the whole reply.
+- Keep "possible_causes" empty (or at most one very broad, hedged phrase). No ranked differential lists yet.
+- Keep "what_to_monitor" to 0-2 universal red-flag signs only if helpful; skip long lists.
+- Keep "recommended_action" empty OR one brief safety line (e.g. when to call a vet) — no treatment plans, home remedies, or "try this" steps yet.
+- Tone: curious, calm, human — short sentences, like texting. No formal disclaimers every turn.
+- Still honor triage in urgency_message; for high urgency you may urge vet contact while still asking one focused question.
 """
 
 
@@ -90,19 +94,34 @@ def generate_response(
     system = build_system_prompt(triage_level, interpreted_query)
     urgency_hint = urgency_message_for_triage(triage_level, species=sp)
     hints = (preference_hints or "").strip()
-    clarify_first = should_clarify_before_detail(interpreted_query, triage_level)
-    output_instructions = _json_instruction(include_feedback_hints=bool(hints))
-    if clarify_first:
-        output_instructions += _CLARIFICATION_FIRST_SUFFIX
-
     conv = (conversation_plain or "").strip()
+    investigation = assess_investigation(
+        interpreted_query,
+        triage_level,
+        conversation_plain=conv or None,
+    )
+    investigate = investigation.continue_investigation
+    output_instructions = _json_instruction(include_feedback_hints=bool(hints))
+    if investigate:
+        output_instructions += _INVESTIGATION_MODE_SUFFIX
+
+    suggested_q = generate_followup_questions(
+        interpreted_query,
+        missing_topics=investigation.missing_topics,
+    )
+
     user_payload = {
         "user_message": user_input,
         "interpreted": interpreted_query,
         "triage_level": triage_level,
-        "CLARIFICATION_FIRST": clarify_first,
+        "INVESTIGATION_MODE": investigate,
+        "INVESTIGATION_COMPLETE": not investigate,
+        "OWNER_TURN_COUNT": investigation.owner_turn_count,
+        "MIN_TURNS_BEFORE_RECOMMENDATION": investigation.min_turns,
+        "MISSING_TOPICS": investigation.missing_topics,
+        "SUGGESTED_QUESTION_FOCUS": suggested_q[0] if suggested_q else None,
         "URGENCY_HINT": urgency_hint,
-        "RETRIEVED_CONTEXT": _context_block(context),
+        "RETRIEVED_CONTEXT": _context_block(context) if not investigate else _context_block(context, max_chars=6000),
         "CONVERSATION": conv if conv else None,
         "PREFERENCE_HINTS": hints,
         "output_instructions": output_instructions,

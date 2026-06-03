@@ -12,9 +12,9 @@ from app.agent.interpreter import interpret_query
 from app.agent.responder import generate_response
 from app.agent.safety import normalize_species_label, urgency_message_for_triage
 from app.agent.triage import (
+    assess_investigation,
     classify_triage,
     generate_followup_questions,
-    should_clarify_before_detail,
 )
 
 router = APIRouter(tags=["agent"])
@@ -81,8 +81,12 @@ def chat(req: ChatRequest) -> FormattedResponse:
     interpret_source = _combined_user_turns(req.message, history=hist)
     interpreted = interpret_query(interpret_source, species=species)
     triage = classify_triage(interpreted)
-    followups = generate_followup_questions(interpreted)
-    clarification_first = should_clarify_before_detail(interpreted, triage)
+    conv_plain = _conversation_transcript(hist)
+    investigation = assess_investigation(interpreted, triage, conversation_plain=conv_plain)
+    followups = generate_followup_questions(
+        interpreted,
+        missing_topics=investigation.missing_topics,
+    )
     pet_word = "cat" if species == "cat" else "dog"
 
     try:
@@ -91,14 +95,14 @@ def chat(req: ChatRequest) -> FormattedResponse:
             triage,
             interpreted,
             preference_hints=req.preference_hints,
-            conversation_plain=_conversation_transcript(hist),
+            conversation_plain=conv_plain,
         )
         out = format_response(
             raw,
             triage,
-            follow_up_questions=None if clarification_first else followups,
+            follow_up_questions=None if investigation.continue_investigation else followups,
             species=species,
-            clarification_first=clarification_first,
+            clarification_first=investigation.continue_investigation,
         )
     except Exception:
         logger.exception("chat generation failed")

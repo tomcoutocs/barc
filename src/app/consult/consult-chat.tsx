@@ -181,17 +181,41 @@ function buildStructuredChunks(
   species?: string | null,
 ): BubbleChunk[] {
   const { noun } = petLabel(species);
-  const chunks: BubbleChunk[] = [
-    {
+  const stillInvestigating =
+    a.possible_causes.length === 0 && a.recommended_action.length === 0;
+  const chunks: BubbleChunk[] = [];
+
+  if (stillInvestigating) {
+    chunks.push({
       key: "hello",
       children: (
         <p className="text-sm leading-relaxed text-[var(--color-on-surface-muted)]">
-          Got it — I’ll break this into a few quick notes so it’s easier to skim.
+          Thanks — I want to understand what&apos;s going on with your {noun} before
+          we talk causes or next steps. Educational only, not a diagnosis.
+        </p>
+      ),
+    });
+    if (a.triage_level === "high" || a.triage_level === "emergency") {
+      chunks.push({
+        key: "triage-urgent",
+        children: (
+          <p className="text-sm font-bold leading-snug text-[var(--color-secondary)]">
+            {a.urgency_message}
+          </p>
+        ),
+      });
+    }
+  } else {
+    chunks.push({
+      key: "hello",
+      children: (
+        <p className="text-sm leading-relaxed text-[var(--color-on-surface-muted)]">
+          Okay — here&apos;s what I&apos;m thinking based on what you&apos;ve shared.
           Educational only, not a diagnosis for your {noun}.
         </p>
       ),
-    },
-    {
+    });
+    chunks.push({
       key: "triage",
       children: (
         <>
@@ -211,8 +235,8 @@ function buildStructuredChunks(
           </p>
         </>
       ),
-    },
-  ];
+    });
+  }
 
   for (const [i, sentence] of splitSummarySentences(a.summary).entries()) {
     chunks.push({
