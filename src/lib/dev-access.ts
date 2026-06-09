@@ -1,14 +1,18 @@
 /**
- * Dev-only tools (feedback viewer). Set DEV_FEEDBACK_VIEWER_EMAILS in env:
- * comma-separated list of allowed emails (case-insensitive).
+ * Dev-only feedback viewer. No email is sent — feedback is stored in Supabase
+ * and shown in the dev tab when enabled.
+ *
+ * Enabled when:
+ * - NODE_ENV is "development" (local), or
+ * - DEV_FEEDBACK_ENABLED=true in env (e.g. Vercel preview / staging)
  */
-export function isDevFeedbackViewer(email: string | null | undefined): boolean {
-  if (!email?.trim()) return false;
-  const raw = process.env.DEV_FEEDBACK_VIEWER_EMAILS?.trim();
-  if (!raw) return false;
-  const allowed = raw
-    .split(",")
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean);
-  return allowed.includes(email.trim().toLowerCase());
+export function isDevFeedbackEnabled(): boolean {
+  if (process.env.NODE_ENV === "development") return true;
+  const flag = process.env.DEV_FEEDBACK_ENABLED?.trim().toLowerCase();
+  return flag === "1" || flag === "true" || flag === "yes";
+}
+
+/** Any logged-in user may open the dev tab when feedback mode is enabled. */
+export function canAccessDevFeedback(): boolean {
+  return isDevFeedbackEnabled();
 }

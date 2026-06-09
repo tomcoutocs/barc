@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { isDevFeedbackEnabled } from "@/lib/dev-access";
 import { createClient } from "@/lib/supabase/server";
 import { ConsultChat } from "./consult-chat";
 
@@ -23,6 +24,7 @@ export default async function ConsultPage() {
       pets={pets ?? []}
       initialThreadId={null}
       initialMessages={[]}
+      showDevTab={isDevFeedbackEnabled()}
     />
   );
 }

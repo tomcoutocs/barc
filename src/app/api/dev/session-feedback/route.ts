@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isDevFeedbackViewer } from "@/lib/dev-access";
+import { canAccessDevFeedback } from "@/lib/dev-access";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { ChatSessionFeedbackRow, ChatSessionSnapshot } from "@/types/chat-session-feedback";
@@ -10,7 +10,7 @@ export async function GET() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user || !isDevFeedbackViewer(user.email)) {
+  if (!user || !canAccessDevFeedback()) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 

@@ -79,7 +79,7 @@ function FeedbackCard({ row }: { row: ChatSessionFeedbackRow }) {
   );
 }
 
-export function DevFeedbackViewer() {
+export function DevFeedbackViewer({ embedded = false }: { embedded?: boolean }) {
   const [rows, setRows] = useState<ChatSessionFeedbackRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -112,18 +112,30 @@ export function DevFeedbackViewer() {
   }, [load]);
 
   return (
-    <div className="mx-auto w-full max-w-4xl px-4 py-10 sm:px-6">
-      <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+    <div
+      className={
+        embedded
+          ? "w-full"
+          : "mx-auto w-full max-w-4xl px-4 py-10 sm:px-6"
+      }
+    >
+      <div
+        className={`flex flex-wrap items-end justify-between gap-4 ${embedded ? "mb-4" : "mb-8"}`}
+      >
         <div>
           <p className="text-xs font-bold uppercase tracking-wide text-[var(--color-secondary)]">
             Development only
           </p>
-          <h1 className="mt-1 text-2xl font-extrabold text-[var(--color-primary)]">
-            Chat feedback review
-          </h1>
-          <p className="mt-2 max-w-xl text-sm text-[var(--color-on-surface-muted)]">
-            Session feedback and full chat snapshots from consult testing. Not visible
-            to regular users.
+          {!embedded ? (
+            <h1 className="mt-1 text-2xl font-extrabold text-[var(--color-primary)]">
+              Chat feedback review
+            </h1>
+          ) : null}
+          <p
+            className={`max-w-xl text-sm text-[var(--color-on-surface-muted)] ${embedded ? "mt-1" : "mt-2"}`}
+          >
+            Stored in the database — not emailed. Expand any row to read the full chat
+            snapshot.
           </p>
         </div>
         <button

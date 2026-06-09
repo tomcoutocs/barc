@@ -24,6 +24,7 @@ import {
   parseStoredAgentContent,
   type ConsultAgentResponse,
 } from "@/types/consult-agent";
+import { DevFeedbackViewer } from "@/app/dev/feedback/dev-feedback-viewer";
 
 export type ConsultPet = {
   id: string;
@@ -115,8 +116,8 @@ function SessionFeedbackPanel({
         How did this chat go?
       </p>
       <p className="mt-1 text-xs leading-relaxed text-[var(--color-on-surface-muted)]">
-        Your notes and the full conversation are saved for the team while we train
-        the agent. Then you&apos;ll start a fresh chat.
+        Your notes and the full conversation are saved to the dev Feedback tab (not
+        emailed). Then you&apos;ll start a fresh chat.
       </p>
       <form onSubmit={submit} className="mt-4 flex flex-col gap-3">
         <textarea
@@ -396,15 +397,53 @@ function AssistantConsultMessage({
   );
 }
 
+function ConsultDevTabs({
+  active,
+  onChange,
+}: {
+  active: "chat" | "feedback";
+  onChange: (tab: "chat" | "feedback") => void;
+}) {
+  return (
+    <div className="mx-auto mb-6 flex w-full max-w-6xl gap-2 px-4 sm:px-6">
+      <button
+        type="button"
+        onClick={() => onChange("chat")}
+        className={`rounded-2xl px-4 py-2 text-xs font-bold uppercase tracking-wide transition ${
+          active === "chat"
+            ? "bg-[var(--color-primary-container)] text-[var(--color-on-primary)]"
+            : "border border-[color-mix(in_srgb,var(--color-on-surface)_18%,transparent)] text-[var(--color-primary)]"
+        }`}
+      >
+        Chat
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange("feedback")}
+        className={`rounded-2xl px-4 py-2 text-xs font-bold uppercase tracking-wide transition ${
+          active === "feedback"
+            ? "bg-[var(--color-secondary)] text-white"
+            : "border border-[color-mix(in_srgb,var(--color-on-surface)_18%,transparent)] text-[var(--color-primary)]"
+        }`}
+      >
+        Feedback
+      </button>
+    </div>
+  );
+}
+
 export function ConsultChat({
   pets,
   initialThreadId,
   initialMessages,
+  showDevTab = false,
 }: {
   pets: ConsultPet[];
   initialThreadId: string | null;
   initialMessages: ConsultMessage[];
+  showDevTab?: boolean;
 }) {
+  const [mainTab, setMainTab] = useState<"chat" | "feedback">("chat");
   const [threadId, setThreadId] = useState<string | null>(initialThreadId);
   const [messages, setMessages] = useState<ConsultMessage[]>(initialMessages);
   const [activePetId, setActivePetId] = useState<string | null>(
@@ -525,8 +564,21 @@ export function ConsultChat({
         : "your pet";
   const placeholderPetName = activePet?.name ?? defaultYourPet;
 
+  if (showDevTab && mainTab === "feedback") {
+    return (
+      <div className="flex flex-1 flex-col py-10">
+        <ConsultDevTabs active={mainTab} onChange={setMainTab} />
+        <div className="mx-auto w-full max-w-6xl flex-1 px-4 sm:px-6">
+          <DevFeedbackViewer embedded />
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-1 gap-8 px-4 py-10 sm:px-6 lg:grid lg:grid-cols-[minmax(0,260px)_1fr]">
+    <div className="flex flex-1 flex-col py-10">
+      {showDevTab ? <ConsultDevTabs active={mainTab} onChange={setMainTab} /> : null}
+      <div className="mx-auto flex w-full max-w-6xl flex-1 gap-8 px-4 sm:px-6 lg:grid lg:grid-cols-[minmax(0,260px)_1fr]">
       <aside className="hidden flex-col gap-6 lg:flex">
         <div>
           <h2 className="text-sm font-bold uppercase tracking-wide text-[var(--color-on-surface-muted)]">
@@ -750,6 +802,7 @@ export function ConsultChat({
             <span className="ml-auto">Barc consult</span>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

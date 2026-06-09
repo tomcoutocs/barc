@@ -3,7 +3,7 @@ import { Manrope } from "next/font/google";
 import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
-import { isDevFeedbackViewer } from "@/lib/dev-access";
+import { isDevFeedbackEnabled } from "@/lib/dev-access";
 import { createClient } from "@/lib/supabase/server";
 
 const manrope = Manrope({
@@ -45,7 +45,7 @@ export default async function RootLayout({
       <body className="flex min-h-full flex-col font-sans">
         <SiteHeader
           user={user}
-          showDevFeedback={isDevFeedbackViewer(user?.email)}
+          showDevFeedback={isDevFeedbackEnabled()}
         />
         <div className="flex flex-1 flex-col">{children}</div>
         <SiteFooter />

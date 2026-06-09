@@ -57,7 +57,7 @@ export function SiteHeader({
             </NavLink>
           ))}
           {showDevFeedback ? (
-            <NavLink href="/dev/feedback">Dev feedback</NavLink>
+            <NavLink href="/dev/feedback">Feedback</NavLink>
           ) : null}
         </nav>
         <div className="flex items-center gap-3">
