@@ -34,7 +34,13 @@ function NavLink({
   );
 }
 
-export function SiteHeader({ user }: { user: User | null }) {
+export function SiteHeader({
+  user,
+  showDevFeedback = false,
+}: {
+  user: User | null;
+  showDevFeedback?: boolean;
+}) {
   return (
     <header className="sticky top-0 z-50 border-b border-[color-mix(in_srgb,var(--color-on-surface)_8%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_92%,transparent)] backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-6 px-4 sm:px-6">
@@ -50,6 +56,9 @@ export function SiteHeader({ user }: { user: User | null }) {
               {item.label}
             </NavLink>
           ))}
+          {showDevFeedback ? (
+            <NavLink href="/dev/feedback">Dev feedback</NavLink>
+          ) : null}
         </nav>
         <div className="flex items-center gap-3">
           <Link

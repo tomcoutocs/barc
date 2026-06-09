@@ -6,12 +6,11 @@ import {
   AlertTriangle,
   Camera,
   CheckCircle2,
+  MessageSquarePlus,
   Paperclip,
   Send,
   Shield,
   Lock,
-  ThumbsDown,
-  ThumbsUp,
 } from "lucide-react";
 import {
   useCallback,
@@ -41,8 +40,6 @@ export type ConsultMessage = {
   role: string;
   content: string;
   created_at: string;
-  feedback_rating?: "up" | "down" | null;
-  feedback_at?: string | null;
 };
 
 function triageBubbleClass(level: string): string {
@@ -74,87 +71,85 @@ function TypingIndicator() {
   );
 }
 
-function MessageFeedbackBar({
-  messageId,
-  feedbackRating,
-  onRated,
+function SessionFeedbackPanel({
+  threadId,
+  onSubmitted,
+  onCancel,
 }: {
-  messageId: string;
-  feedbackRating: "up" | "down" | null;
-  onRated: (messageId: string, rating: "up" | "down" | null) => void;
+  threadId: string;
+  onSubmitted: () => void;
+  onCancel: () => void;
 }) {
-  const [rating, setRating] = useState<"up" | "down" | null>(feedbackRating);
-  const [pending, setPending] = useState(false);
+  const [comment, setComment] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    setRating(feedbackRating);
-  }, [feedbackRating, messageId]);
-
-  async function vote(next: "up" | "down") {
-    const resolved = rating === next ? null : next;
-    const prev = rating;
-    setRating(resolved);
-    setPending(true);
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    const text = comment.trim();
+    if (!text || submitting) return;
+    setSubmitting(true);
+    setError(null);
     try {
-      const res = await fetch("/api/chat/feedback", {
+      const res = await fetch("/api/chat/session-feedback", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messageId, rating: resolved }),
+        body: JSON.stringify({ threadId, comment: text }),
       });
-      const data = (await res.json()) as { error?: string; feedback_rating?: "up" | "down" | null };
+      const data = (await res.json()) as { error?: string };
       if (!res.ok) {
-        setRating(prev);
+        setError(data.error ?? "Could not submit feedback");
         return;
       }
-      const updated = data.feedback_rating ?? null;
-      setRating(updated);
-      onRated(messageId, updated);
+      onSubmitted();
     } catch {
-      setRating(prev);
+      setError("Network error");
     } finally {
-      setPending(false);
+      setSubmitting(false);
     }
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-3 pt-1">
-      <span className="text-[11px] font-bold uppercase tracking-wide text-[var(--color-on-surface-muted)]">
-        Helpful?
-      </span>
-      <div className="flex items-center gap-1">
-        <button
-          type="button"
-          disabled={pending}
-          aria-label="Thumbs up"
-          aria-pressed={rating === "up"}
-          onClick={() => vote("up")}
-          className={`rounded-xl p-2 transition ${
-            rating === "up"
-              ? "bg-[color-mix(in_srgb,var(--color-tertiary)_28%,transparent)] text-[var(--color-primary)]"
-              : "text-[var(--color-on-surface-muted)] hover:bg-[color-mix(in_srgb,var(--color-on-surface)_8%,transparent)]"
-          } disabled:opacity-50`}
-        >
-          <ThumbsUp className="h-4 w-4" aria-hidden />
-        </button>
-        <button
-          type="button"
-          disabled={pending}
-          aria-label="Thumbs down"
-          aria-pressed={rating === "down"}
-          onClick={() => vote("down")}
-          className={`rounded-xl p-2 transition ${
-            rating === "down"
-              ? "bg-[color-mix(in_srgb,var(--color-secondary)_22%,transparent)] text-[var(--color-secondary)]"
-              : "text-[var(--color-on-surface-muted)] hover:bg-[color-mix(in_srgb,var(--color-on-surface)_8%,transparent)]"
-          } disabled:opacity-50`}
-        >
-          <ThumbsDown className="h-4 w-4" aria-hidden />
-        </button>
-      </div>
-      <span className="max-w-[min(100%,22rem)] text-[10px] leading-snug text-[var(--color-on-surface-muted)]">
-        Your votes shape preference hints on future replies (thumbs up reinforce, thumbs down steer away—not
-        automatic fine-tuning).
-      </span>
+    <div className="rounded-2xl border-2 border-[color-mix(in_srgb,var(--color-secondary)_35%,transparent)] bg-[var(--color-surface)] p-5 shadow-[var(--shadow-float)]">
+      <p className="text-sm font-bold text-[var(--color-primary)]">
+        How did this chat go?
+      </p>
+      <p className="mt-1 text-xs leading-relaxed text-[var(--color-on-surface-muted)]">
+        Your notes and the full conversation are saved for the team while we train
+        the agent. Then you&apos;ll start a fresh chat.
+      </p>
+      <form onSubmit={submit} className="mt-4 flex flex-col gap-3">
+        <textarea
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          rows={4}
+          placeholder="What worked, what felt off, what was missing…"
+          className="w-full resize-y rounded-2xl border border-[color-mix(in_srgb,var(--color-on-surface)_15%,transparent)] bg-[var(--color-surface-low)] px-4 py-3 text-sm text-[var(--color-on-surface)] outline-none placeholder:text-[var(--color-on-surface-muted)] focus:border-[var(--color-secondary)]"
+          disabled={submitting}
+        />
+        {error ? (
+          <p className="text-sm font-medium text-[var(--color-secondary)]" role="alert">
+            {error}
+          </p>
+        ) : null}
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="submit"
+            disabled={submitting || !comment.trim()}
+            className="rounded-2xl bg-[var(--color-primary-container)] px-4 py-2 text-xs font-bold uppercase tracking-wide text-[var(--color-on-primary)] disabled:opacity-50"
+          >
+            {submitting ? "Saving…" : "Submit & new chat"}
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={submitting}
+            className="rounded-2xl border border-[color-mix(in_srgb,var(--color-on-surface)_18%,transparent)] px-4 py-2 text-xs font-bold uppercase tracking-wide text-[var(--color-primary)]"
+          >
+            Keep chatting
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
@@ -419,6 +414,7 @@ export function ConsultChat({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [staggerAssistantId, setStaggerAssistantId] = useState<string | null>(null);
+  const [showFeedback, setShowFeedback] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const activePet = useMemo(
@@ -434,24 +430,25 @@ export function ConsultChat({
     setStaggerAssistantId(null);
   }, []);
 
-  const handleRated = useCallback((messageId: string, rating: "up" | "down" | null) => {
-    setMessages((prev) =>
-      prev.map((m) =>
-        m.id === messageId ? { ...m, feedback_rating: rating } : m,
-      ),
-    );
-  }, []);
-
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, sending, staggerAssistantId]);
 
-  function clearHistory() {
+  function startNewChat() {
     setThreadId(null);
     setMessages([]);
     setError(null);
     setStaggerAssistantId(null);
+    setShowFeedback(false);
   }
+
+  function handleFeedbackSubmitted() {
+    startNewChat();
+  }
+
+  const canSubmitFeedback =
+    Boolean(threadId) &&
+    messages.some((m) => m.role === "assistant" && !m.id.startsWith("local-"));
 
   async function sendMessage(e?: React.FormEvent) {
     e?.preventDefault();
@@ -638,12 +635,22 @@ export function ConsultChat({
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
+            {canSubmitFeedback ? (
+              <button
+                type="button"
+                onClick={() => setShowFeedback(true)}
+                className="inline-flex items-center gap-2 rounded-2xl border border-[color-mix(in_srgb,var(--color-secondary)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-secondary)_8%,transparent)] px-4 py-2 text-xs font-bold uppercase tracking-wide text-[var(--color-secondary)]"
+              >
+                <MessageSquarePlus className="h-4 w-4" />
+                Done — feedback
+              </button>
+            ) : null}
             <button
               type="button"
-              onClick={clearHistory}
+              onClick={startNewChat}
               className="rounded-2xl border border-[color-mix(in_srgb,var(--color-on-surface)_18%,transparent)] px-4 py-2 text-xs font-bold uppercase tracking-wide text-[var(--color-primary)]"
             >
-              Clear history
+              New chat
             </button>
             <Link
               href="/pricing"
@@ -658,8 +665,9 @@ export function ConsultChat({
         <div className="flex flex-1 flex-col gap-6 overflow-y-auto py-6">
           {messages.length === 0 ? (
             <p className="text-center text-sm text-[var(--color-on-surface-muted)]">
-              Ask anything about {placeholderPetName}. Messages are saved to your
-              account.
+              Fresh chat — ask anything about {placeholderPetName}. When you&apos;re
+              done, tap <strong>Done — feedback</strong> so we can review the full
+              conversation.
             </p>
           ) : (
             messages.map((m) =>
@@ -682,17 +690,6 @@ export function ConsultChat({
                     onStaggerProgress={bumpScroll}
                     onStaggerComplete={completeStagger}
                   />
-                  {!m.id.startsWith("local-") ? (
-                    <MessageFeedbackBar
-                      messageId={m.id}
-                      feedbackRating={
-                        m.feedback_rating === "up" || m.feedback_rating === "down"
-                          ? m.feedback_rating
-                          : null
-                      }
-                      onRated={handleRated}
-                    />
-                  ) : null}
                 </div>
               ),
             )
@@ -705,6 +702,14 @@ export function ConsultChat({
           <p className="text-sm font-medium text-[var(--color-secondary)]" role="alert">
             {error}
           </p>
+        ) : null}
+
+        {showFeedback && threadId ? (
+          <SessionFeedbackPanel
+            threadId={threadId}
+            onSubmitted={handleFeedbackSubmitted}
+            onCancel={() => setShowFeedback(false)}
+          />
         ) : null}
 
         <div className="mt-auto border-t border-[color-mix(in_srgb,var(--color-on-surface)_8%,transparent)] pt-4">
