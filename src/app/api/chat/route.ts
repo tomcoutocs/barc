@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { fetchFeedbackHintsForUser } from "@/lib/chat-feedback-hints";
+import { fetchTeachingHintsForModel, mergePreferenceHints } from "@/lib/teaching-hints";
 import type { ConsultAgentResponse } from "@/types/consult-agent";
 import { formatAgentForStorage, parseStoredAgentContent } from "@/types/consult-agent";
 
@@ -197,7 +198,11 @@ export async function POST(request: Request) {
 
   let preferenceHints: string | null = null;
   try {
-    preferenceHints = await fetchFeedbackHintsForUser(supabase, user.id);
+    const [userHints, teachingHints] = await Promise.all([
+      fetchFeedbackHintsForUser(supabase, user.id),
+      fetchTeachingHintsForModel(supabase),
+    ]);
+    preferenceHints = mergePreferenceHints(userHints, teachingHints);
   } catch {
     preferenceHints = null;
   }

@@ -25,6 +25,7 @@ import {
   type ConsultAgentResponse,
 } from "@/types/consult-agent";
 import { DevFeedbackViewer } from "@/app/dev/feedback/dev-feedback-viewer";
+import { TeachingChat } from "./teaching-chat";
 
 export type ConsultPet = {
   id: string;
@@ -310,7 +311,7 @@ function buildPlainChunks(content: string): BubbleChunk[] {
   }));
 }
 
-function AssistantConsultMessage({
+export function AssistantConsultMessage({
   content,
   species,
   stagger,
@@ -397,34 +398,44 @@ function AssistantConsultMessage({
   );
 }
 
+type ConsultMainTab = "chat" | "teach" | "feedback";
+
 function ConsultDevTabs({
   active,
   onChange,
 }: {
-  active: "chat" | "feedback";
-  onChange: (tab: "chat" | "feedback") => void;
+  active: ConsultMainTab;
+  onChange: (tab: ConsultMainTab) => void;
 }) {
+  const tabClass = (tab: ConsultMainTab, accent: "primary" | "tertiary" | "secondary") =>
+    active === tab
+      ? accent === "tertiary"
+        ? "bg-[var(--color-tertiary)] text-[var(--color-on-primary)]"
+        : accent === "secondary"
+          ? "bg-[var(--color-secondary)] text-white"
+          : "bg-[var(--color-primary-container)] text-[var(--color-on-primary)]"
+      : "border border-[color-mix(in_srgb,var(--color-on-surface)_18%,transparent)] text-[var(--color-primary)]";
+
   return (
-    <div className="mx-auto mb-6 flex w-full max-w-6xl gap-2 px-4 sm:px-6">
+    <div className="mx-auto mb-6 flex w-full max-w-6xl flex-wrap gap-2 px-4 sm:px-6">
       <button
         type="button"
         onClick={() => onChange("chat")}
-        className={`rounded-2xl px-4 py-2 text-xs font-bold uppercase tracking-wide transition ${
-          active === "chat"
-            ? "bg-[var(--color-primary-container)] text-[var(--color-on-primary)]"
-            : "border border-[color-mix(in_srgb,var(--color-on-surface)_18%,transparent)] text-[var(--color-primary)]"
-        }`}
+        className={`rounded-2xl px-4 py-2 text-xs font-bold uppercase tracking-wide transition ${tabClass("chat", "primary")}`}
       >
         Chat
       </button>
       <button
         type="button"
+        onClick={() => onChange("teach")}
+        className={`rounded-2xl px-4 py-2 text-xs font-bold uppercase tracking-wide transition ${tabClass("teach", "tertiary")}`}
+      >
+        Teach
+      </button>
+      <button
+        type="button"
         onClick={() => onChange("feedback")}
-        className={`rounded-2xl px-4 py-2 text-xs font-bold uppercase tracking-wide transition ${
-          active === "feedback"
-            ? "bg-[var(--color-secondary)] text-white"
-            : "border border-[color-mix(in_srgb,var(--color-on-surface)_18%,transparent)] text-[var(--color-primary)]"
-        }`}
+        className={`rounded-2xl px-4 py-2 text-xs font-bold uppercase tracking-wide transition ${tabClass("feedback", "secondary")}`}
       >
         Feedback
       </button>
@@ -443,7 +454,7 @@ export function ConsultChat({
   initialMessages: ConsultMessage[];
   showDevTab?: boolean;
 }) {
-  const [mainTab, setMainTab] = useState<"chat" | "feedback">("chat");
+  const [mainTab, setMainTab] = useState<ConsultMainTab>("chat");
   const [threadId, setThreadId] = useState<string | null>(initialThreadId);
   const [messages, setMessages] = useState<ConsultMessage[]>(initialMessages);
   const [activePetId, setActivePetId] = useState<string | null>(
@@ -563,6 +574,15 @@ export function ConsultChat({
         ? "your dog"
         : "your pet";
   const placeholderPetName = activePet?.name ?? defaultYourPet;
+
+  if (showDevTab && mainTab === "teach") {
+    return (
+      <div className="flex flex-1 flex-col py-10">
+        <ConsultDevTabs active={mainTab} onChange={setMainTab} />
+        <TeachingChat pets={pets} />
+      </div>
+    );
+  }
 
   if (showDevTab && mainTab === "feedback") {
     return (

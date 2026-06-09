@@ -29,8 +29,10 @@ Use short bullets (one line each). No markdown. No medication dosages. Prefer 2-
 """
 
 _JSON_HINT_SUFFIX = """
-If PREFERENCE_HINTS is non-empty, it may list two sections: thumbs-down (patterns to avoid) and thumbs-up (reinforcement of good tone/structure).
-Avoid repeating mistakes from the downvote list; prefer qualities from the upvote list when they align with RETRIEVED_CONTEXT and safety. Safety and sources always override stylistic preference.
+If PREFERENCE_HINTS is non-empty, it may include:
+- VET TEACHING CORRECTIONS: trainer-reviewed scenarios marked INCORRECT/PARTIAL/CORRECT — apply the trainer notes for similar cases; do not repeat marked mistakes; reinforce marked-good patterns.
+- Thumbs down / thumbs up: user vote patterns on past replies.
+Avoid repeating mistakes from teaching corrections and downvotes; prefer reinforced patterns when they align with RETRIEVED_CONTEXT and safety. Safety and sources always override preference and teaching notes.
 """
 
 
