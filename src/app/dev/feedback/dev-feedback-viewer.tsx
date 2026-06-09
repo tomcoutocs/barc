@@ -4,6 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import { ChevronDown, ChevronRight, MessageSquare } from "lucide-react";
 import type { ChatSessionFeedbackRow } from "@/types/chat-session-feedback";
 import { parseStoredAgentContent } from "@/types/consult-agent";
+import { TeachingCorrectionsPanel } from "./teaching-corrections-panel";
+
+type FeedbackSubTab = "sessions" | "teaching";
 
 function messagePreview(content: string, role: string): string {
   if (role !== "assistant") return content;
@@ -79,7 +82,11 @@ function FeedbackCard({ row }: { row: ChatSessionFeedbackRow }) {
   );
 }
 
-export function DevFeedbackViewer({ embedded = false }: { embedded?: boolean }) {
+function SessionFeedbackList({
+  refreshKey,
+}: {
+  refreshKey: number;
+}) {
   const [rows, setRows] = useState<ChatSessionFeedbackRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -109,7 +116,38 @@ export function DevFeedbackViewer({ embedded = false }: { embedded?: boolean }) 
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, refreshKey]);
+
+  if (loading) {
+    return <p className="text-sm text-[var(--color-on-surface-muted)]">Loading…</p>;
+  }
+  if (error) {
+    return (
+      <p className="text-sm font-medium text-[var(--color-secondary)]" role="alert">
+        {error}
+      </p>
+    );
+  }
+  if (rows.length === 0) {
+    return (
+      <p className="rounded-2xl bg-[var(--color-surface-low)] px-5 py-8 text-center text-sm text-[var(--color-on-surface-muted)]">
+        No session feedback yet. Finish a consult chat and submit feedback to see it
+        here.
+      </p>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-4">
+      {rows.map((row) => (
+        <FeedbackCard key={row.id} row={row} />
+      ))}
+    </div>
+  );
+}
+
+export function DevFeedbackViewer({ embedded = false }: { embedded?: boolean }) {
+  const [subTab, setSubTab] = useState<FeedbackSubTab>("sessions");
+  const [refreshKey, setRefreshKey] = useState(0);
 
   return (
     <div
@@ -120,7 +158,7 @@ export function DevFeedbackViewer({ embedded = false }: { embedded?: boolean }) 
       }
     >
       <div
-        className={`flex flex-wrap items-end justify-between gap-4 ${embedded ? "mb-4" : "mb-8"}`}
+        className={`flex flex-wrap items-end justify-between gap-4 ${embedded ? "mb-4" : "mb-6"}`}
       >
         <div>
           <p className="text-xs font-bold uppercase tracking-wide text-[var(--color-secondary)]">
@@ -128,43 +166,53 @@ export function DevFeedbackViewer({ embedded = false }: { embedded?: boolean }) 
           </p>
           {!embedded ? (
             <h1 className="mt-1 text-2xl font-extrabold text-[var(--color-primary)]">
-              Chat feedback review
+              Feedback review
             </h1>
           ) : null}
           <p
             className={`max-w-xl text-sm text-[var(--color-on-surface-muted)] ${embedded ? "mt-1" : "mt-2"}`}
           >
-            Stored in the database — not emailed. Expand any row to read the full chat
-            snapshot.
+            Session notes and teaching corrections — all stored in the database.
           </p>
         </div>
         <button
           type="button"
-          onClick={() => void load()}
-          disabled={loading}
-          className="rounded-2xl border border-[color-mix(in_srgb,var(--color-on-surface)_18%,transparent)] px-4 py-2 text-xs font-bold uppercase tracking-wide text-[var(--color-primary)] disabled:opacity-50"
+          onClick={() => setRefreshKey((k) => k + 1)}
+          className="rounded-2xl border border-[color-mix(in_srgb,var(--color-on-surface)_18%,transparent)] px-4 py-2 text-xs font-bold uppercase tracking-wide text-[var(--color-primary)]"
         >
           Refresh
         </button>
       </div>
 
-      {loading ? (
-        <p className="text-sm text-[var(--color-on-surface-muted)]">Loading…</p>
-      ) : error ? (
-        <p className="text-sm font-medium text-[var(--color-secondary)]" role="alert">
-          {error}
-        </p>
-      ) : rows.length === 0 ? (
-        <p className="rounded-2xl bg-[var(--color-surface-low)] px-5 py-8 text-center text-sm text-[var(--color-on-surface-muted)]">
-          No session feedback yet. Finish a consult chat and submit feedback to see it
-          here.
-        </p>
+      <div className="mb-6 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => setSubTab("sessions")}
+          className={`rounded-2xl px-4 py-2 text-xs font-bold uppercase tracking-wide transition ${
+            subTab === "sessions"
+              ? "bg-[var(--color-primary-container)] text-[var(--color-on-primary)]"
+              : "border border-[color-mix(in_srgb,var(--color-on-surface)_18%,transparent)] text-[var(--color-primary)]"
+          }`}
+        >
+          Session feedback
+        </button>
+        <button
+          type="button"
+          onClick={() => setSubTab("teaching")}
+          className={`rounded-2xl px-4 py-2 text-xs font-bold uppercase tracking-wide transition ${
+            subTab === "teaching"
+              ? "bg-[var(--color-tertiary)] text-[var(--color-on-primary)]"
+              : "border border-[color-mix(in_srgb,var(--color-on-surface)_18%,transparent)] text-[var(--color-primary)]"
+          }`}
+        >
+          Teaching corrections
+        </button>
+      </div>
+
+      {subTab === "sessions" ? (
+        <SessionFeedbackList refreshKey={refreshKey} />
       ) : (
-        <div className="flex flex-col gap-4">
-          {rows.map((row) => (
-            <FeedbackCard key={row.id} row={row} />
-          ))}
-        </div>
+        <TeachingCorrectionsPanel key={refreshKey} />
       )}
     </div>
   );
