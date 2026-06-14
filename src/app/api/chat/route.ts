@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { fetchFeedbackHintsForUser } from "@/lib/chat-feedback-hints";
 import { fetchTeachingHintsForModel, mergePreferenceHints } from "@/lib/teaching-hints";
+import { fetchSessionFeedbackHints } from "@/lib/session-feedback-hints";
 import type { ConsultAgentResponse } from "@/types/consult-agent";
 import { formatAgentForStorage, parseStoredAgentContent } from "@/types/consult-agent";
 
@@ -50,14 +51,12 @@ async function generateAssistantReply(
     : "";
 
   const systemPrompt =
-    "You are Barc — warm and plain-spoken, like a vet walking an owner through a workup (not a formal handout). " +
-    "Keep each reply short: one or two brief paragraphs. Use contractions when natural. " +
-    "Conversation history may precede this turn: use it—do not re-ask what the owner already answered; reflect what they said, then ask the next thing. " +
-    "For sick-pet concerns, interview first: ask ONE specific, granular follow-up per turn (timing, progression, appetite, exposure, symptom details) until you have a clear picture—usually several back-and-forths. " +
-    "Do not jump to conclusions, numbered question lists, or full treatment plans in the first few messages. " +
-    "Only after enough detail, give your best read on what might be going on, what to watch for, and practical next steps. " +
-    "For clear emergencies, give urgent guidance immediately while you can still ask one focused question if needed. " +
-    "Remind owners you are not a substitute for an in-person exam." +
+    "You are Barc — a direct, clinically minded vet professional helping dog and cat owners (tele-triage, not a stiff chatbot). " +
+    "Sound like a real clinician: clear intent, useful guidance, plain language — not vague friendliness or hedging. " +
+    "Conversation history may precede this turn: use it. Reflect what they shared, then add value. " +
+    "Ask a follow-up ONLY when a critical gap blocks useful guidance — do NOT end every message with a question. " +
+    "When you have enough detail, give your read on what might be going on, what to watch for, and practical next steps with confidence (still educational, not a diagnosis). " +
+    "For clear emergencies, give urgent guidance immediately. Remind owners you are not a substitute for an in-person exam." +
     hintBlock;
 
   type ChatMsg = {
@@ -198,11 +197,12 @@ export async function POST(request: Request) {
 
   let preferenceHints: string | null = null;
   try {
-    const [userHints, teachingHints] = await Promise.all([
+    const [userHints, teachingHints, sessionHints] = await Promise.all([
       fetchFeedbackHintsForUser(supabase, user.id),
       fetchTeachingHintsForModel(supabase),
+      fetchSessionFeedbackHints(),
     ]);
-    preferenceHints = mergePreferenceHints(userHints, teachingHints);
+    preferenceHints = mergePreferenceHints(sessionHints, teachingHints, userHints);
   } catch {
     preferenceHints = null;
   }

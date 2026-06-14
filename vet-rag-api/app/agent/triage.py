@@ -159,11 +159,11 @@ def _min_owner_turns(triage_level: str, *, has_symptoms: bool) -> int:
     if t == "emergency":
         return 0
     if t == "high":
-        return 3
+        return 2
     if t == "moderate" and has_symptoms:
-        return 5
+        return 3
     if t == "low" and has_symptoms:
-        return 4
+        return 2
     return 2
 
 
@@ -207,7 +207,7 @@ def assess_investigation(
     missing = [t for t in sorted(required) if t not in covered]
     min_turns = _min_owner_turns(triage_level, has_symptoms=True)
 
-    if owner_turns < min_turns:
+    if owner_turns < min_turns and len(missing) >= 3:
         return InvestigationState(
             True,
             owner_turn_count=owner_turns,
@@ -215,7 +215,7 @@ def assess_investigation(
             min_turns=min_turns,
         )
 
-    if len(missing) >= 2:
+    if len(missing) >= 3:
         return InvestigationState(
             True,
             owner_turn_count=owner_turns,
@@ -223,7 +223,7 @@ def assess_investigation(
             min_turns=min_turns,
         )
 
-    if missing and owner_turns < min_turns + 2:
+    if missing and owner_turns < min_turns:
         return InvestigationState(
             True,
             owner_turn_count=owner_turns,

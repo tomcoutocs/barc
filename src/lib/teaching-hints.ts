@@ -77,11 +77,10 @@ export async function fetchTeachingHintsForModel(
 }
 
 export function mergePreferenceHints(
-  userHints: string | null,
-  teachingHints: string | null,
+  ...sections: (string | null | undefined)[]
 ): string | null {
-  const sections = [teachingHints, userHints].filter((s) => s?.trim());
-  if (!sections.length) return null;
-  const merged = sections.join("\n\n");
+  const parts = sections.filter((s) => typeof s === "string" && s.trim()) as string[];
+  if (!parts.length) return null;
+  const merged = parts.join("\n\n");
   return merged.length > 5_800 ? `${merged.slice(0, 5_800)}…` : merged;
 }
