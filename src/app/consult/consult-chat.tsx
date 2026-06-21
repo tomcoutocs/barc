@@ -176,66 +176,50 @@ function splitSummarySentences(summary: string, max = 3): string[] {
 function buildStructuredChunks(
   a: ConsultAgentResponse,
   species?: string | null,
+  petName?: string | null,
 ): BubbleChunk[] {
   const { noun } = petLabel(species);
+  const name = petName?.trim() || `your ${noun}`;
   const stillInvestigating =
     a.possible_causes.length === 0 && a.recommended_action.length === 0;
   const chunks: BubbleChunk[] = [];
 
   if (stillInvestigating) {
-    chunks.push({
-      key: "hello",
-      children: (
-        <p className="text-sm leading-relaxed text-[var(--color-on-surface-muted)]">
-          Thanks — I want to understand what&apos;s going on with your {noun} before
-          we talk causes or next steps. Educational only, not a diagnosis.
-        </p>
-      ),
-    });
     if (a.triage_level === "high" || a.triage_level === "emergency") {
       chunks.push({
         key: "triage-urgent",
         children: (
-          <p className="text-sm font-bold leading-snug text-[var(--color-secondary)]">
+          <p className="text-sm font-semibold leading-snug text-secondary">
             {a.urgency_message}
           </p>
         ),
       });
     }
   } else {
-    chunks.push({
-      key: "hello",
-      children: (
-        <p className="text-sm leading-relaxed text-[var(--color-on-surface-muted)]">
-          Okay — here&apos;s what I&apos;m thinking based on what you&apos;ve shared.
-          Educational only, not a diagnosis for your {noun}.
-        </p>
-      ),
-    });
-    chunks.push({
-      key: "triage",
-      children: (
-        <>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-[var(--color-primary-container)] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--color-on-primary)]">
-              {a.triage_level}
-            </span>
-            {a.triage_level === "emergency" ? (
-              <AlertTriangle
-                className="h-4 w-4 shrink-0 text-[var(--color-secondary)]"
-                aria-hidden
-              />
-            ) : null}
-          </div>
-          <p className="mt-3 font-bold leading-snug text-[var(--color-secondary)]">
-            {a.urgency_message}
-          </p>
-        </>
-      ),
-    });
+    if (a.triage_level === "emergency" || a.triage_level === "high") {
+      chunks.push({
+        key: "triage",
+        children: (
+          <>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-primary-container px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-on-primary">
+                {a.triage_level}
+              </span>
+              {a.triage_level === "emergency" ? (
+                <AlertTriangle className="h-4 w-4 shrink-0 text-secondary" aria-hidden />
+              ) : null}
+            </div>
+            <p className="mt-2 font-semibold leading-snug text-secondary">
+              {a.urgency_message}
+            </p>
+          </>
+        ),
+      });
+    }
   }
 
-  for (const [i, sentence] of splitSummarySentences(a.summary).entries()) {
+  const summaryParts = splitSummarySentences(a.summary, stillInvestigating ? 4 : 3);
+  for (const [i, sentence] of summaryParts.entries()) {
     chunks.push({
       key: `summary-${i}`,
       children: <p className="leading-relaxed">{sentence}</p>,
@@ -246,9 +230,8 @@ function buildStructuredChunks(
     chunks.push({
       key: "causes-intro",
       children: (
-        <p className="text-sm leading-relaxed text-[var(--color-on-surface-muted)]">
-          A few things vets sometimes explore with signs like these — ideas from our
-          training sources, not what’s definitely going on with your {noun}:
+        <p className="text-sm leading-relaxed text-on-surface-muted">
+          A few possibilities vets often consider for {name} — not a diagnosis:
         </p>
       ),
     });
@@ -264,9 +247,7 @@ function buildStructuredChunks(
     chunks.push({
       key: "monitor-intro",
       children: (
-        <p className="text-sm font-semibold text-[var(--color-on-surface)]">
-          What I’d watch for
-        </p>
+        <p className="text-sm font-semibold text-on-surface">Watch for</p>
       ),
     });
     for (const [i, item] of a.what_to_monitor.entries()) {
@@ -281,9 +262,7 @@ function buildStructuredChunks(
     chunks.push({
       key: "actions-intro",
       children: (
-        <p className="text-sm font-semibold text-[var(--color-on-surface)]">
-          Practical next steps
-        </p>
+        <p className="text-sm font-semibold text-on-surface">What I&apos;d do next</p>
       ),
     });
     for (const [i, item] of a.recommended_action.entries()) {
@@ -314,12 +293,14 @@ function buildPlainChunks(content: string): BubbleChunk[] {
 export function AssistantConsultMessage({
   content,
   species,
+  petName,
   stagger,
   onStaggerProgress,
   onStaggerComplete,
 }: {
   content: string;
   species?: string | null;
+  petName?: string | null;
   stagger?: boolean;
   onStaggerProgress?: () => void;
   onStaggerComplete?: () => void;
@@ -327,10 +308,10 @@ export function AssistantConsultMessage({
   const { chunks, structured } = useMemo(() => {
     const parsed = parseStoredAgentContent(content);
     const ch = parsed.structured
-      ? buildStructuredChunks(parsed.structured, species)
+      ? buildStructuredChunks(parsed.structured, species, petName)
       : buildPlainChunks(content);
     return { chunks: ch, structured: parsed.structured };
-  }, [content, species]);
+  }, [content, species, petName]);
 
   const level = structured?.triage_level ?? "low";
   const totalChunks = chunks.length;
@@ -354,7 +335,7 @@ export function AssistantConsultMessage({
             onStaggerComplete?.();
             return;
           }
-          timers.push(setTimeout(showNext, 400));
+          timers.push(setTimeout(showNext, 520));
         };
         showNext();
       }, 320),
@@ -407,38 +388,29 @@ function ConsultDevTabs({
   active: ConsultMainTab;
   onChange: (tab: ConsultMainTab) => void;
 }) {
-  const tabClass = (tab: ConsultMainTab, accent: "primary" | "tertiary" | "secondary") =>
-    active === tab
-      ? accent === "tertiary"
-        ? "bg-[var(--color-tertiary)] text-[var(--color-on-primary)]"
-        : accent === "secondary"
-          ? "bg-[var(--color-secondary)] text-white"
-          : "bg-[var(--color-primary-container)] text-[var(--color-on-primary)]"
-      : "border border-[color-mix(in_srgb,var(--color-on-surface)_18%,transparent)] text-[var(--color-primary)]";
+  const tabs: { id: ConsultMainTab; label: string }[] = [
+    { id: "chat", label: "Chat" },
+    { id: "teach", label: "Teach" },
+    { id: "feedback", label: "Feedback" },
+  ];
 
   return (
-    <div className="mx-auto mb-6 flex w-full max-w-6xl flex-wrap gap-2 px-4 sm:px-6">
-      <button
-        type="button"
-        onClick={() => onChange("chat")}
-        className={`rounded-2xl px-4 py-2 text-xs font-bold uppercase tracking-wide transition ${tabClass("chat", "primary")}`}
-      >
-        Chat
-      </button>
-      <button
-        type="button"
-        onClick={() => onChange("teach")}
-        className={`rounded-2xl px-4 py-2 text-xs font-bold uppercase tracking-wide transition ${tabClass("teach", "tertiary")}`}
-      >
-        Teach
-      </button>
-      <button
-        type="button"
-        onClick={() => onChange("feedback")}
-        className={`rounded-2xl px-4 py-2 text-xs font-bold uppercase tracking-wide transition ${tabClass("feedback", "secondary")}`}
-      >
-        Feedback
-      </button>
+    <div className="mx-auto mb-6 flex w-full max-w-6xl px-4 sm:px-6">
+      <div className="segmented-control" role="tablist" aria-label="Consult modes">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={active === tab.id}
+            data-active={active === tab.id}
+            onClick={() => onChange(tab.id)}
+            className="segmented-control-item"
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -596,12 +568,39 @@ export function ConsultChat({
   }
 
   return (
-    <div className="flex flex-1 flex-col py-10">
+    <div className="page-mesh flex flex-1 flex-col py-8 sm:py-10">
       {showDevTab ? <ConsultDevTabs active={mainTab} onChange={setMainTab} /> : null}
-      <div className="mx-auto flex w-full max-w-6xl flex-1 gap-8 px-4 sm:px-6 lg:grid lg:grid-cols-[minmax(0,260px)_1fr]">
+      <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 sm:px-6 lg:grid lg:grid-cols-[minmax(0,260px)_1fr] lg:gap-8">
+      {pets.length > 0 ? (
+        <div className="flex gap-2 overflow-x-auto pb-1 lg:hidden">
+          {pets.map((pet) => {
+            const active = pet.id === (activePetId ?? pets[0]?.id);
+            const img =
+              pet.photo_url ??
+              "https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=120&q=80";
+            return (
+              <button
+                key={pet.id}
+                type="button"
+                onClick={() => setActivePetId(pet.id)}
+                className={`flex shrink-0 items-center gap-2 rounded-2xl px-3 py-2 transition ${
+                  active
+                    ? "bg-surface-high shadow-soft ring-1 ring-secondary/20"
+                    : "bg-surface-low/80"
+                }`}
+              >
+                <div className="relative h-9 w-9 overflow-hidden rounded-xl">
+                  <Image src={img} alt={pet.name} fill className="object-cover" sizes="36px" />
+                </div>
+                <span className="text-sm font-bold text-primary">{pet.name}</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
       <aside className="hidden flex-col gap-6 lg:flex">
         <div>
-          <h2 className="text-sm font-bold uppercase tracking-wide text-[var(--color-on-surface-muted)]">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-on-surface-muted">
             Your pets
           </h2>
           {pets.length === 0 ? (
@@ -633,10 +632,10 @@ export function ConsultChat({
                     key={pet.id}
                     type="button"
                     onClick={() => setActivePetId(pet.id)}
-                    className={`flex w-full items-center gap-3 rounded-2xl p-3 text-left ${
+                    className={`flex w-full items-center gap-3 rounded-2xl p-3 text-left transition duration-200 ${
                       active
-                        ? "bg-[var(--color-surface-high)] shadow-[var(--shadow-float)]"
-                        : "bg-[var(--color-surface-low)]"
+                        ? "bg-surface-high shadow-soft ring-1 ring-secondary/15"
+                        : "bg-surface-low/60 hover:bg-surface-low"
                     }`}
                   >
                     <div className="relative h-12 w-12 overflow-hidden rounded-xl">
@@ -673,9 +672,9 @@ export function ConsultChat({
             + Add new pet
           </Link>
         </div>
-        <div className="mt-auto rounded-3xl bg-[var(--color-primary-container)] p-5 text-sm leading-relaxed text-[var(--color-on-primary)] shadow-[var(--shadow-float)]">
-          <p className="text-xs font-bold uppercase tracking-wide text-[color-mix(in_srgb,white_75%,transparent)]">
-            The Apothecary Note
+        <div className="mt-auto overflow-hidden rounded-3xl bg-primary-container p-5 text-sm leading-relaxed text-on-primary shadow-elevated">
+          <p className="text-xs font-bold uppercase tracking-wider text-white/75">
+            Daily tip
           </p>
           <p className="mt-2">
             Consistent daily motion is essential for maintaining joint health in
@@ -684,10 +683,10 @@ export function ConsultChat({
         </div>
       </aside>
 
-      <div className="flex min-h-[70vh] flex-col rounded-[2rem] bg-[var(--color-surface-low)] p-4 shadow-[var(--shadow-float)] sm:p-6">
-        <div className="flex flex-col gap-4 border-b border-[color-mix(in_srgb,var(--color-on-surface)_8%,transparent)] pb-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="glass-panel flex min-h-[70vh] flex-col rounded-[2rem] p-4 sm:p-6">
+        <div className="flex flex-col gap-4 border-b border-primary/[0.06] pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
-            <div className="relative h-12 w-12 overflow-hidden rounded-full">
+            <div className="relative h-12 w-12 overflow-hidden rounded-2xl shadow-soft ring-2 ring-white/80">
               <Image
                 src="https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=120&q=80"
                 alt="Barc AI"
@@ -697,12 +696,11 @@ export function ConsultChat({
               />
             </div>
             <div>
-              <p className="font-bold text-[var(--color-primary)]">
-                Barc AI Consultant
-              </p>
-              <p className="text-xs font-bold uppercase tracking-wide text-[var(--color-on-surface-muted)]">
-                Professional medical AI{" "}
-                <CheckCircle2 className="inline h-3.5 w-3.5 text-[var(--color-tertiary)]" />
+              <p className="font-bold text-primary">Barc AI Consultant</p>
+              <p className="flex items-center gap-1.5 text-xs font-medium text-on-surface-muted">
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-tertiary" aria-hidden />
+                Online · research-backed
+                <CheckCircle2 className="h-3.5 w-3.5 text-tertiary" aria-hidden />
               </p>
             </div>
           </div>
@@ -711,7 +709,7 @@ export function ConsultChat({
               <button
                 type="button"
                 onClick={() => setShowFeedback(true)}
-                className="inline-flex items-center gap-2 rounded-2xl border border-[color-mix(in_srgb,var(--color-secondary)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-secondary)_8%,transparent)] px-4 py-2 text-xs font-bold uppercase tracking-wide text-[var(--color-secondary)]"
+                className="inline-flex items-center gap-2 rounded-xl bg-secondary/10 px-3 py-2 text-xs font-bold text-secondary transition hover:bg-secondary/15"
               >
                 <MessageSquarePlus className="h-4 w-4" />
                 Done — feedback
@@ -720,13 +718,13 @@ export function ConsultChat({
             <button
               type="button"
               onClick={startNewChat}
-              className="rounded-2xl border border-[color-mix(in_srgb,var(--color-on-surface)_18%,transparent)] px-4 py-2 text-xs font-bold uppercase tracking-wide text-[var(--color-primary)]"
+              className="rounded-xl bg-surface-high/80 px-3 py-2 text-xs font-bold text-primary transition hover:bg-surface-high"
             >
               New chat
             </button>
             <Link
               href="/pricing"
-              className="inline-flex items-center gap-2 rounded-2xl bg-[var(--color-primary-container)] px-4 py-2 text-xs font-bold uppercase tracking-wide text-[var(--color-on-primary)]"
+              className="inline-flex items-center gap-2 rounded-xl bg-primary-container px-3 py-2 text-xs font-bold text-on-primary shadow-soft transition hover:bg-primary"
             >
               Book a vet
               <Camera className="h-4 w-4" />
@@ -736,17 +734,28 @@ export function ConsultChat({
 
         <div className="flex flex-1 flex-col gap-6 overflow-y-auto py-6">
           {messages.length === 0 ? (
-            <p className="text-center text-sm text-[var(--color-on-surface-muted)]">
-              Fresh chat — ask anything about {placeholderPetName}. When you&apos;re
-              done, tap <strong>Done — feedback</strong> so we can review the full
-              conversation.
-            </p>
+            <div className="mx-auto max-w-md space-y-3 text-center">
+              <p className="text-sm leading-relaxed text-on-surface-muted">
+                Hi — I&apos;m here to help with{" "}
+                {activePet?.name ? (
+                  <span className="font-semibold text-primary">{activePet.name}</span>
+                ) : (
+                  placeholderPetName
+                )}
+                . Tell me what&apos;s going on in your own words; I&apos;ll ask only if I
+                need something important to give useful guidance.
+              </p>
+              <p className="text-xs text-on-surface-muted/80">
+                Educational only — not a diagnosis. For emergencies, contact a vet or ER
+                clinic right away.
+              </p>
+            </div>
           ) : (
             messages.map((m) =>
               m.role === "user" ? (
                 <div
                   key={m.id}
-                  className={`ml-auto max-w-[85%] rounded-3xl rounded-br-md bg-[var(--color-primary-container)] px-5 py-4 text-sm leading-relaxed text-[var(--color-on-primary)] ${
+                  className={`ml-auto max-w-[85%] rounded-3xl rounded-br-md bg-primary-container px-5 py-3.5 text-sm leading-relaxed text-on-primary shadow-soft ${
                     m.id.startsWith("local-") ? "opacity-90" : ""
                   }`}
                   aria-busy={m.id.startsWith("local-") ? true : undefined}
@@ -758,6 +767,7 @@ export function ConsultChat({
                   <AssistantConsultMessage
                     content={m.content}
                     species={activePet?.species}
+                    petName={activePet?.name}
                     stagger={m.id === staggerAssistantId}
                     onStaggerProgress={bumpScroll}
                     onStaggerComplete={completeStagger}
@@ -784,24 +794,24 @@ export function ConsultChat({
           />
         ) : null}
 
-        <div className="mt-auto border-t border-[color-mix(in_srgb,var(--color-on-surface)_8%,transparent)] pt-4">
+        <div className="mt-auto pt-4">
           <form
             onSubmit={sendMessage}
-            className="flex items-center gap-3 rounded-3xl bg-[var(--color-surface)] px-4 py-3 shadow-inner"
+            className="flex items-center gap-2 rounded-2xl bg-surface p-2 shadow-elevated ring-1 ring-primary/[0.05]"
           >
-            <Paperclip className="h-5 w-5 shrink-0 text-[var(--color-on-surface-muted)]" aria-hidden />
+            <Paperclip className="ml-2 h-5 w-5 shrink-0 text-on-surface-muted" aria-hidden />
             <input
               type="text"
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               placeholder={`Message about ${placeholderPetName}…`}
-              className="min-w-0 flex-1 border-0 bg-transparent text-sm text-[var(--color-on-surface)] outline-none placeholder:text-[var(--color-on-surface-muted)]"
+              className="min-w-0 flex-1 border-0 bg-transparent px-1 py-2.5 text-sm text-on-surface outline-none placeholder:text-on-surface-muted"
               disabled={sending}
             />
             <button
               type="submit"
               disabled={sending || !draft.trim()}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary-container)] text-[var(--color-on-primary)] disabled:opacity-50"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary-container text-on-primary shadow-soft transition hover:bg-primary disabled:opacity-50"
               aria-label="Send"
             >
               <Send className="h-4 w-4" />

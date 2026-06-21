@@ -14,14 +14,15 @@
   --color-tertiary: #84a59d;
   --color-on-primary: #ffffff;
   --color-on-surface: #1a1a14;
-  --color-on-surface-muted: rgba(26, 26, 20, 0.72);
+  --color-on-surface-muted: rgba(26, 26, 20, 0.68);
+  --shadow-soft: 0 1px 2px rgba(0, 11, 11, 0.04), 0 8px 24px rgba(0, 11, 11, 0.06);
   --shadow-float: 0 20px 40px rgba(0, 11, 11, 0.05);
+  --shadow-elevated: 0 4px 6px rgba(0, 11, 11, 0.03), 0 24px 48px rgba(0, 11, 11, 0.08);
+  --shadow-glow: 0 8px 32px rgba(224, 122, 95, 0.18);
+  --radius-xl: 1.5rem;
+  --radius-2xl: 2rem;
 }
 
-/*
- * Tailwind @theme tokens (must not self-reference `--x: var(--x)` — that breaks Tailwind / Lightning).
- * Mirrors :root palette; Next/font exposes --font-manrope on <html>.
- */
 @theme inline {
   --color-surface: #fdfae7;
   --color-surface-low: #f7f4e1;
@@ -33,13 +34,14 @@
   --color-tertiary: #84a59d;
   --color-on-primary: #ffffff;
   --color-on-surface: #1a1a14;
+  --color-on-surface-muted: rgba(26, 26, 20, 0.68);
+  --shadow-soft: var(--shadow-soft);
+  --shadow-float: var(--shadow-float);
+  --shadow-elevated: var(--shadow-elevated);
+  --shadow-glow: var(--shadow-glow);
   --font-sans: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
 }
 
-/*
- * Explicit utilities: Tailwind arbitrary `border-[color-mix(in_srgb,...)]` values confuse the CSS
- * optimizer (bad tokenization around `var(--color-*)`), so borders use plain CSS here.
- */
 @layer utilities {
   .consult-triage-emergency {
     border-color: color-mix(in srgb, var(--color-secondary) 50%, transparent);
@@ -60,15 +62,71 @@
   .consult-typing-bubble-shell {
     border-color: color-mix(in srgb, var(--color-on-surface) 12%, transparent);
   }
+
+  .glass-panel {
+    background: color-mix(in srgb, var(--color-surface-low) 88%, transparent);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    box-shadow:
+      var(--shadow-soft),
+      inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 5%, transparent);
+  }
+
+  .page-mesh {
+    background-color: var(--color-surface);
+    background-image:
+      radial-gradient(
+        ellipse 80% 50% at 20% -10%,
+        color-mix(in srgb, var(--color-tertiary) 18%, transparent),
+        transparent 55%
+      ),
+      radial-gradient(
+        ellipse 60% 40% at 90% 10%,
+        color-mix(in srgb, var(--color-secondary-bright) 14%, transparent),
+        transparent 50%
+      ),
+      radial-gradient(
+        ellipse 50% 30% at 50% 100%,
+        color-mix(in srgb, var(--color-primary-container) 8%, transparent),
+        transparent 45%
+      );
+  }
+
+  .segmented-control {
+    display: inline-flex;
+    gap: 0.25rem;
+    padding: 0.25rem;
+    border-radius: 1rem;
+    background: color-mix(in srgb, var(--color-surface-high) 70%, var(--color-surface));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 6%, transparent);
+  }
+
+  .segmented-control-item {
+    border-radius: 0.75rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    transition: all 0.2s ease;
+    color: var(--color-on-surface-muted);
+  }
+
+  .segmented-control-item[data-active="true"] {
+    background: var(--color-surface);
+    color: var(--color-primary);
+    box-shadow: var(--shadow-soft);
+  }
 }
 
 body {
   background: var(--color-surface);
   color: var(--color-on-surface);
   font-family: var(--font-manrope), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Consult chat — typing indicator */
 @keyframes consult-typing-bounce {
   0%,
   60%,
@@ -107,4 +165,19 @@ body {
 
 .consult-bubble-enter {
   animation: consult-bubble-in 0.38s ease-out forwards;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.6s ease-out forwards;
 }

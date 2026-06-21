@@ -120,6 +120,32 @@ class Settings(BaseSettings):
         validation_alias="MERCK_CRAWL_DELAY_S",
     )
 
+    avma_journals_crawl_enabled: bool = Field(
+        default=False,
+        validation_alias="AVMA_JOURNALS_CRAWL_ENABLED",
+    )
+    avma_journals_crawl_max_articles: int = Field(
+        default=2500,
+        ge=1,
+        le=10_000,
+        validation_alias="AVMA_JOURNALS_CRAWL_MAX_ARTICLES",
+    )
+    avma_journals_crawl_max_visits: int = Field(
+        default=35000,
+        ge=50,
+        le=50_000,
+        validation_alias="AVMA_JOURNALS_CRAWL_MAX_VISITS",
+    )
+    avma_journals_crawl_delay_s: float = Field(
+        default=2.5,
+        ge=0.5,
+        validation_alias="AVMA_JOURNALS_CRAWL_DELAY_S",
+    )
+    avma_journals_require_dog_or_cat: bool = Field(
+        default=True,
+        validation_alias="AVMA_JOURNALS_REQUIRE_DOG_OR_CAT",
+    )
+
 
 @lru_cache
 def get_settings() -> Settings:

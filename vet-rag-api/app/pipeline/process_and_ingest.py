@@ -25,8 +25,16 @@ def process_and_ingest(scraped_docs: list[dict], *, min_words: int = 300) -> int
         source_type = raw.get("source_type") or "merck"
         species_raw = raw.get("species")
         species = str(species_raw).strip().lower() if species_raw else "dog"
+        doc_min_words = raw.get("min_words")
+        if doc_min_words is not None:
+            try:
+                doc_min_words = int(doc_min_words)
+            except (TypeError, ValueError):
+                doc_min_words = min_words
+        else:
+            doc_min_words = 100 if source_type == "avma_journal" else min_words
         text = clean_text(raw_text)
-        if not deduper.accept(text):
+        if not deduper.accept(text, min_words=doc_min_words):
             logger.info("process_and_ingest: skip (short or duplicate) url=%s", url)
             continue
         meta = enrich_metadata(

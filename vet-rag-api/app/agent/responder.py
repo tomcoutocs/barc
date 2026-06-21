@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from openai import OpenAI
@@ -19,7 +20,7 @@ INVESTIGATION_COMPLETE is true: you may give a full, grounded recommendation.
 
 Return a single JSON object with exactly these keys:
 - "triage_level": one of "emergency", "high", "moderate", "low" (must match the triage we provide)
-- "summary": 1-2 short sentences max; lead with the most useful clinical takeaway for the owner. Empathy is brief — prioritize helpful substance over vague friendliness.
+- "summary": 1-3 short sentences max; write as you would speak to the owner on a call. Lead with the most useful takeaway. If INVESTIGATION_MODE and you need one detail, weave a single question naturally into the last sentence — do not add a separate interrogatory bullet elsewhere.
 - "possible_causes": array of short bullets (educational possibilities, not diagnoses). When RETRIEVED CONTEXT supports it, each bullet should pair a plausible cause with why it might fit this case (sign pattern, timing, species). Order most likely first; omit guesses the context does not support.
 - "what_to_monitor": array of short bullets (specific signs that should prompt vet contact soon)
 - "recommended_action": array of short bullets (safe, practical steps; vet visit when appropriate)
@@ -43,17 +44,24 @@ def _json_instruction(*, include_feedback_hints: bool) -> str:
 
 _INVESTIGATION_MODE_SUFFIX = """
 
-INVESTIGATION_MODE is active — gather history like a vet, but stay helpful, not interrogative.
+INVESTIGATION_MODE is active — think out loud with the owner, like a vet mid-consult, not an intake form.
 - OWNER_TURN_COUNT and MIN_TURNS_BEFORE_RECOMMENDATION show how early you are.
-- CONVERSATION has prior turns: read them. Acknowledge one specific detail they shared.
-- Ask a follow-up in "summary" ONLY if a critical gap remains (see MISSING_TOPICS). If the picture is already workable, share interim clinical thinking WITHOUT a question this turn.
-- Do NOT end every message with a question — that feels robotic. Questions are optional tools, not a requirement.
+- CONVERSATION has prior turns: read them. Reflect one specific thing they said before asking or advising.
+- If PET_NAME is set, use it naturally (e.g. "With Max's appetite down since yesterday…").
+- Share interim clinical thinking when you can — do not withhold useful context just to ask questions.
+- Ask at most ONE follow-up in "summary" only when a critical gap blocks useful guidance. Never stack multiple questions.
+- Do NOT end every message with a question — that feels robotic. Many turns should be statements plus useful context only.
 - Keep "possible_causes" empty or one brief hedge unless you have enough to be useful.
 - Keep "what_to_monitor" to 0-2 red-flag signs if helpful.
 - Keep "recommended_action" empty OR one brief safety line — no full treatment plans until investigation is complete.
-- Tone: direct, clinically confident, professionally helpful — not vague or overly soft.
 - Still honor triage in urgency_message.
 """
+
+
+def _pet_name_from_message(text: str) -> str | None:
+    """Extract name from leading [Dog: Name, ...] or [Cat: Name, ...] prefix."""
+    m = re.match(r"^\[(?:Dog|Cat):\s*([^,\]]+)", text.strip(), re.I)
+    return m.group(1).strip() if m else None
 
 
 def _context_block(chunks: list[dict[str, Any]], max_chars: int = 14000) -> str:
@@ -98,6 +106,7 @@ def generate_response(
     urgency_hint = urgency_message_for_triage(triage_level, species=sp)
     hints = (preference_hints or "").strip()
     conv = (conversation_plain or "").strip()
+    pet_name = _pet_name_from_message(user_input)
     investigation = assess_investigation(
         interpreted_query,
         triage_level,
@@ -116,6 +125,7 @@ def generate_response(
     user_payload = {
         "user_message": user_input,
         "interpreted": interpreted_query,
+        "PET_NAME": pet_name,
         "triage_level": triage_level,
         "INVESTIGATION_MODE": investigate,
         "INVESTIGATION_COMPLETE": not investigate,
@@ -132,7 +142,7 @@ def generate_response(
 
     resp = client.chat.completions.create(
         model=settings.openai_chat_model,
-        temperature=0.42,
+        temperature=0.48,
         response_format={"type": "json_object"},
         messages=[
             {"role": "system", "content": system},

@@ -4,6 +4,7 @@ import logging
 from urllib.parse import urlparse
 
 from app.scrapers.avma import scrape_avma, scrape_html_resource
+from app.scrapers.avma_journals import scrape_avma_journal
 from app.scrapers.guidelines import scrape_guideline_pdf
 from app.scrapers.merck import scrape_merck
 
@@ -18,6 +19,8 @@ def scrape_one(url: str, *, delay_s: float = 1.0) -> dict:
 
     if "merckvetmanual.com" in host:
         return scrape_merck(url, delay_s=delay_s)
+    if "avmajournals.avma.org" in host:
+        return scrape_avma_journal(url, delay_s=delay_s)
     if "avma.org" in host:
         if is_pdf:
             return scrape_guideline_pdf(url, "avma", delay_s=delay_s)

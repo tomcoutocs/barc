@@ -1,41 +1,36 @@
 import Link from "next/link";
 import Image from "next/image";
+import { Badge } from "@/components/ui/badge";
+import { ButtonLink } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 
 export default function HomePage() {
   return (
-    <div className="flex flex-1 flex-col">
+    <div className="page-mesh flex flex-1 flex-col">
       <section className="mx-auto grid max-w-6xl gap-12 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:items-center lg:py-24">
-        <div className="space-y-8">
-          <p className="inline-flex rounded-full bg-[color-mix(in_srgb,var(--color-tertiary)_22%,var(--color-surface))] px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-[var(--color-primary-container)]">
-            Trusted by 100K+ pet parents
-          </p>
-          <h1 className="max-w-xl text-4xl font-extrabold leading-[1.1] tracking-tight text-[var(--color-primary)] [-webkit-letter-spacing:-0.02em] sm:text-5xl">
-            <span className="font-semibold">Professional</span> vet advice,{" "}
-            <span className="text-[var(--color-secondary-bright)]">
+        <div className="animate-fade-up space-y-8">
+          <Badge variant="default">Trusted by 100K+ pet parents</Badge>
+          <h1 className="max-w-xl text-4xl font-extrabold leading-[1.08] tracking-tight text-primary sm:text-5xl lg:text-[3.25rem]">
+            Professional vet advice,{" "}
+            <span className="bg-gradient-to-r from-secondary to-secondary-bright bg-clip-text text-transparent">
               now in your pocket.
             </span>
           </h1>
-          <p className="max-w-lg text-lg leading-relaxed text-[var(--color-on-surface-muted)]">
+          <p className="max-w-lg text-lg leading-relaxed text-on-surface-muted">
             AI-driven symptom checks and live consultations with certified
-            veterinarians—built for dogs and the people who love them.
+            veterinarians—built for dogs, cats, and the people who love them.
           </p>
-          <div className="flex flex-wrap gap-4">
-            <Link
-              href="/consult"
-              className="inline-flex rounded-2xl bg-[var(--color-primary-container)] px-8 py-3.5 text-sm font-bold text-[var(--color-on-primary)] shadow-[var(--shadow-float)] transition hover:bg-[var(--color-primary)]"
-            >
+          <div className="flex flex-wrap gap-3">
+            <ButtonLink href="/consult" size="lg">
               Start consultation
-            </Link>
-            <Link
-              href="/pricing"
-              className="inline-flex rounded-2xl border-2 border-[color-mix(in_srgb,var(--color-primary-container)_35%,transparent)] px-8 py-3.5 text-sm font-bold text-[var(--color-primary-container)] transition hover:bg-[var(--color-surface-low)]"
-            >
+            </ButtonLink>
+            <ButtonLink href="/pricing" variant="outline" size="lg">
               How it works
-            </Link>
+            </ButtonLink>
           </div>
         </div>
-        <div className="relative">
-          <div className="overflow-hidden rounded-3xl bg-[var(--color-surface-low)] shadow-[var(--shadow-float)]">
+        <div className="relative animate-fade-up [animation-delay:120ms]">
+          <div className="overflow-hidden rounded-[2rem] bg-surface-low shadow-elevated ring-1 ring-primary/[0.04]">
             <Image
               src="https://images.unsplash.com/photo-1552053831-71594a27632d?w=800&q=80"
               alt="Happy dog outdoors"
@@ -45,56 +40,54 @@ export default function HomePage() {
               priority
             />
           </div>
-          <div className="absolute -bottom-4 left-4 max-w-xs rounded-2xl bg-[var(--color-surface)] p-4 shadow-[var(--shadow-float)] sm:-bottom-6 sm:left-8">
-            <p className="text-xs font-bold uppercase tracking-wide text-[var(--color-secondary)]">
+          <Card className="absolute -bottom-4 left-4 max-w-xs sm:-bottom-6 sm:left-8">
+            <p className="text-xs font-bold uppercase tracking-wide text-secondary">
               Vet on demand
             </p>
-            <p className="mt-1 text-sm leading-relaxed text-[var(--color-on-surface)]">
+            <p className="mt-1 text-sm leading-relaxed text-on-surface">
               “Barc saved us an emergency trip at 2 AM. Truly a lifesaver.”
             </p>
-          </div>
+          </Card>
         </div>
       </section>
 
-      <section className="bg-[var(--color-surface-low)] py-20">
+      <section className="py-20">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <div className="mx-auto max-w-2xl text-center">
-            <h2 className="text-3xl font-extrabold tracking-tight text-[var(--color-primary)] sm:text-4xl">
+            <h2 className="text-3xl font-extrabold tracking-tight text-primary sm:text-4xl">
               Care at the speed of light
             </h2>
-            <p className="mt-4 text-[var(--color-on-surface-muted)]">
+            <p className="mt-4 text-on-surface-muted">
               From first question to a clear plan—without the waiting room.
             </p>
           </div>
-          <div className="mt-14 grid gap-8 md:grid-cols-3">
+          <div className="mt-14 grid gap-6 md:grid-cols-3">
             {[
               {
                 title: "Consult",
                 body: "AI triage or direct chat with a vet when it matters.",
-                accent: "bg-[color-mix(in_srgb,var(--color-secondary-bright)_18%,var(--color-surface))]",
+                accent: "from-secondary-bright/15 to-surface",
               },
               {
                 title: "Diagnose",
                 body: "Clinical-grade assessments from history and visuals.",
-                accent: "bg-[color-mix(in_srgb,var(--color-primary-container)_12%,var(--color-surface))]",
+                accent: "from-primary-container/10 to-surface",
               },
               {
                 title: "Resolve",
                 body: "Plans, referrals, and follow-ups you can act on.",
-                accent: "bg-[color-mix(in_srgb,var(--color-tertiary)_20%,var(--color-surface))]",
+                accent: "from-tertiary/20 to-surface",
               },
             ].map((card) => (
-              <div
+              <Card
                 key={card.title}
-                className={`rounded-3xl p-8 ${card.accent} shadow-[var(--shadow-float)]`}
+                className={`bg-gradient-to-br ${card.accent} p-8 transition hover:-translate-y-0.5 hover:shadow-elevated`}
               >
-                <h3 className="text-xl font-bold text-[var(--color-primary)]">
-                  {card.title}
-                </h3>
-                <p className="mt-3 leading-relaxed text-[var(--color-on-surface-muted)]">
+                <h3 className="text-xl font-bold text-primary">{card.title}</h3>
+                <p className="mt-3 leading-relaxed text-on-surface-muted">
                   {card.body}
                 </p>
-              </div>
+              </Card>
             ))}
           </div>
         </div>
@@ -103,27 +96,21 @@ export default function HomePage() {
       <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
         <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
           <div className="grid grid-cols-2 gap-4 sm:gap-6">
-            <div className="rounded-3xl bg-[var(--color-primary-container)] p-8 text-[var(--color-on-primary)]">
+            <Card className="bg-primary-container p-8 text-on-primary">
               <p className="text-sm font-bold opacity-90">24/7</p>
               <p className="mt-2 text-lg font-extrabold">Instant support</p>
-            </div>
-            <div className="row-span-2 rounded-3xl bg-[var(--color-secondary-bright)] p-6 text-[var(--color-on-primary)]">
-              <p className="text-sm font-bold uppercase tracking-wide">
-                AI precision
-              </p>
+            </Card>
+            <Card className="row-span-2 bg-secondary-bright p-6 text-on-primary shadow-glow">
+              <p className="text-sm font-bold uppercase tracking-wide">AI precision</p>
               <p className="mt-4 text-2xl font-extrabold leading-tight">
                 Human-verified care
               </p>
-            </div>
-            <div className="rounded-3xl bg-[var(--color-surface-high)] p-6">
-              <p className="text-xs font-bold uppercase text-[var(--color-secondary)]">
-                Accuracy
-              </p>
-              <p className="mt-2 text-xl font-bold text-[var(--color-primary)]">
-                99.4% benchmark
-              </p>
-            </div>
-            <div className="col-span-2 overflow-hidden rounded-3xl sm:col-span-1">
+            </Card>
+            <Card className="p-6">
+              <p className="text-xs font-bold uppercase text-secondary">Accuracy</p>
+              <p className="mt-2 text-xl font-bold text-primary">99.4% benchmark</p>
+            </Card>
+            <div className="col-span-2 overflow-hidden rounded-3xl shadow-soft ring-1 ring-primary/[0.04] sm:col-span-1">
               <Image
                 src="https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=600&q=80"
                 alt="Dog portrait"
@@ -134,13 +121,11 @@ export default function HomePage() {
             </div>
           </div>
           <div className="space-y-6">
-            <h2 className="text-3xl font-extrabold tracking-tight text-[var(--color-primary)] sm:text-4xl">
+            <h2 className="text-3xl font-extrabold tracking-tight text-primary sm:text-4xl">
               AI-powered precision.{" "}
-              <span className="text-[var(--color-secondary-bright)]">
-                Human-verified care.
-              </span>
+              <span className="text-secondary-bright">Human-verified care.</span>
             </h2>
-            <p className="leading-relaxed text-[var(--color-on-surface-muted)]">
+            <p className="leading-relaxed text-on-surface-muted">
               Our models are trained on clinical patterns and reviewed by
               licensed veterinarians—so you get fast answers without guessing.
             </p>
@@ -151,10 +136,10 @@ export default function HomePage() {
               ].map((item) => (
                 <li
                   key={item}
-                  className="flex items-center gap-3 text-[var(--color-on-surface)]"
+                  className="flex items-center gap-3 text-on-surface"
                 >
                   <span
-                    className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--color-secondary-bright)_22%,transparent)] text-xs font-bold text-[var(--color-secondary)]"
+                    className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-secondary-bright/20 text-xs font-bold text-secondary"
                     aria-hidden
                   >
                     ✓
@@ -169,10 +154,10 @@ export default function HomePage() {
 
       <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
         <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl font-extrabold tracking-tight text-[var(--color-primary)] sm:text-4xl">
+          <h2 className="text-3xl font-extrabold tracking-tight text-primary sm:text-4xl">
             Trusted by veterinary experts
           </h2>
-          <p className="mt-4 text-[var(--color-on-surface-muted)]">
+          <p className="mt-4 text-on-surface-muted">
             Real clinicians shape our safety rails—so AI stays helpful, not
             reckless.
           </p>
@@ -192,46 +177,43 @@ export default function HomePage() {
               role: "Emergency medicine",
             },
           ].map((t) => (
-            <div
-              key={t.name}
-              className="rounded-3xl bg-[var(--color-surface-low)] p-8 text-left shadow-[var(--shadow-float)]"
-            >
-              <p className="text-lg font-medium leading-relaxed text-[var(--color-primary)]">
+            <Card key={t.name} className="p-8 text-left">
+              <p className="text-lg font-medium leading-relaxed text-primary">
                 “{t.quote}”
               </p>
-              <p className="mt-6 text-sm font-bold text-[var(--color-secondary-bright)]">
+              <p className="mt-6 text-sm font-bold text-secondary-bright">
                 {t.name}
               </p>
-              <p className="text-xs uppercase tracking-wide text-[var(--color-on-surface-muted)]">
+              <p className="text-xs uppercase tracking-wide text-on-surface-muted">
                 {t.role}
               </p>
-            </div>
+            </Card>
           ))}
         </div>
       </section>
 
       <section className="mx-auto max-w-6xl px-4 pb-24 sm:px-6">
-        <div className="rounded-[2rem] bg-[var(--color-primary-container)] px-8 py-14 text-center text-[var(--color-on-primary)] shadow-[var(--shadow-float)] sm:px-16">
+        <div className="overflow-hidden rounded-[2rem] bg-primary-container px-8 py-14 text-center text-on-primary shadow-elevated sm:px-16">
+          <div className="pointer-events-none absolute inset-0 opacity-30" aria-hidden />
           <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
             Ready to provide the best care?
           </h2>
-          <p className="mx-auto mt-4 max-w-xl text-[color-mix(in_srgb,white_82%,transparent)]">
+          <p className="mx-auto mt-4 max-w-xl text-white/80">
             Join thousands of pet owners who trust Barc for daily wellness and
             clinical precision.
           </p>
-          <div className="mt-10 flex flex-wrap justify-center gap-4">
-            <Link
-              href="/consult"
-              className="inline-flex rounded-2xl bg-[var(--color-secondary-bright)] px-8 py-3.5 text-sm font-bold text-[var(--color-on-primary)] transition hover:brightness-110"
-            >
+          <div className="mt-10 flex flex-wrap justify-center gap-3">
+            <ButtonLink href="/consult" variant="accent" size="lg">
               Start consultation
-            </Link>
-            <Link
+            </ButtonLink>
+            <ButtonLink
               href="/pricing"
-              className="inline-flex rounded-2xl border-2 border-[color-mix(in_srgb,white_55%,transparent)] px-8 py-3.5 text-sm font-bold text-white transition hover:bg-[color-mix(in_srgb,white_8%,transparent)]"
+              variant="outline"
+              size="lg"
+              className="border-white/40 bg-white/5 text-white hover:bg-white/10 hover:ring-white/30"
             >
               View pricing
-            </Link>
+            </ButtonLink>
           </div>
         </div>
       </section>

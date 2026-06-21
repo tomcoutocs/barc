@@ -8,6 +8,9 @@ This adds **scraping, cleaning, metadata enrichment, and deduplication** on top 
 |------|------|
 | `app/scrapers/merck.py` | Merck Veterinary Manual HTML |
 | `app/scrapers/avma.py` | Generic HTML (`scrape_html_resource`) + AVMA helper |
+| `app/scrapers/avma_journals.py` | Single JAVMA/AJVR article (PubFactory HTML) |
+| `app/scrapers/avma_journals_crawl.py` | BFS crawl of [avmajournals.avma.org](https://avmajournals.avma.org/) |
+| `app/scrapers/avma_journals_extract.py` | Title + abstract + keywords from PubFactory pages |
 | `app/scrapers/guidelines.py` | AAHA / WSAVA / AVMA **PDFs** (bytes → `load_pdf_bytes`) |
 | `app/scrapers/scrape_dispatch.py` | `scrape_one` / `run_all_scrapers` URL routing |
 | `app/utils/cleaner.py` | `clean_text` |
@@ -31,18 +34,30 @@ pip install -r requirements.txt
 
 1. **`pipeline_main.py`** crawls **Merck Veterinary Manual → Dog owners** and **Cat owners** via BFS from `MERCK_DOG_CRAWL_SEEDS` / `MERCK_CAT_CRAWL_SEEDS`, up to **`MERCK_CRAWL_MAX_ARTICLES`** article URLs **per species** (paths like `/dog-owners/<section>/<page>` and `/cat-owners/<section>/<page>`). Each page is fetched **once** for both link discovery and text extraction.
 2. Add optional **`ADDITIONAL_URLS`** in `pipeline_main.py` for AVMA / AAHA / WSAVA (same as before).
-3. Tune in **`.env.local`**:
+3. Enable **AVMA Journals** crawl (JAVMA + AJVR) with `AVMA_JOURNALS_CRAWL_ENABLED=true` — indexes **title + abstract + keywords** for dog/cat articles (full text is often paywalled).
+4. Tune in **`.env.local`**:
 
 | Variable | Meaning |
 |----------|---------|
 | `MERCK_CRAWL_MAX_ARTICLES` | Stop after this many articles **per species** (dog crawl + cat crawl each use this cap; default `2500`) |
 | `MERCK_CRAWL_MAX_VISITS` | Safety cap on BFS page fetches (default `35000`) |
 | `MERCK_CRAWL_DELAY_S` | Pause between HTTP requests (default `1.0`) |
+| `AVMA_JOURNALS_CRAWL_ENABLED` | When `true`, also crawl [avmajournals.avma.org](https://avmajournals.avma.org/) (default `false`) |
+| `AVMA_JOURNALS_CRAWL_MAX_ARTICLES` | Stop after this many unique JAVMA/AJVR articles (default `2500`) |
+| `AVMA_JOURNALS_CRAWL_MAX_VISITS` | Safety cap on BFS page fetches (default `35000`) |
+| `AVMA_JOURNALS_CRAWL_DELAY_S` | Pause between requests — use ≥1.5s (default `1.5`) |
+| `AVMA_JOURNALS_REQUIRE_DOG_OR_CAT` | When `true`, only ingest articles mentioning dogs or cats (default `true`) |
 
 ```powershell
 python pipeline_main.py
-# e.g. larger batch:
-# MERCK_CRAWL_MAX_ARTICLES=600 python pipeline_main.py
+# Merck only (default):
+# python pipeline_main.py
+
+# Merck + AVMA journal abstracts:
+# $env:AVMA_JOURNALS_CRAWL_ENABLED="true"; python pipeline_main.py
+
+# AVMA journals only (skip Merck by editing pipeline_main or run crawl directly):
+# python -c "from app.scrapers.avma_journals_crawl import crawl_avma_journals; ..."
 ```
 
 **Cost:** each ingested document creates multiple embedding API calls and vector upserts. Hundreds of pages → significant OpenAI + Pinecone usage.
@@ -73,6 +88,7 @@ Logs show crawl progress, skipped documents (short/duplicate), fetch failures (a
 ## Legal / ethical use
 
 - Merck, AAHA, WSAVA, and AVMA content is **copyrighted**. Use only what your organization is licensed to index, or public summaries you have rights to use.
+- **AVMA Journals** ([avmajournals.avma.org](https://avmajournals.avma.org/)): this pipeline ingests **publicly visible abstracts** only. Full-text PDFs/HTML often require a subscription. Confirm your AVMA license before bulk indexing.
 - Implement **rate limiting** (`delay_s` in `run_all_scrapers`) and honor **robots.txt**.
 - This code is for **internal/clinical tooling** with proper governance, not for bulk redistribution of publisher content.
 

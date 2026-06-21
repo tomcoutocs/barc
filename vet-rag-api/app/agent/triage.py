@@ -223,6 +223,10 @@ def assess_investigation(
             min_turns=min_turns,
         )
 
+    # Enough context to give useful guidance — don't drag the interview.
+    if owner_turns >= min_turns and len(missing) <= 2:
+        return InvestigationState(False, owner_turn_count=owner_turns, missing_topics=missing)
+
     if missing and owner_turns < min_turns:
         return InvestigationState(
             True,
@@ -248,19 +252,19 @@ def should_clarify_before_detail(
 
 
 _QUESTION_BY_TOPIC: dict[str, str] = {
-    "duration": "When did you first notice this, and has it been constant since or coming and going?",
-    "progression": "Compared to when it started, is it getting worse, about the same, or improving?",
-    "appetite_water": "How are eating and drinking right now — normal, less, or refusing both?",
-    "demeanor": "How is their energy and mood — acting like themselves, quieter, or painful/restless?",
-    "age_weight": "Roughly how old are they, and about how much do they weigh?",
-    "exposure": "Any chance they got into something unusual — food scraps, plants, meds, chemicals, or a diet change?",
-    "vomit_detail": "About the vomiting: how often, and any blood, bile, or foam?",
-    "stool_detail": "About the stool: how often, and watery, bloody, or with mucus?",
-    "urination": "How is peeing — normal, straining, accidents, or blood?",
-    "breathing_detail": "Tell me more about the breathing — coughing, panting at rest, or working hard to breathe?",
-    "skin_itch": "Where are they itchy or licking most, and any rash, bumps, or hair loss?",
-    "neuro": "Any wobbliness, head tilt, circling, or repeated episodes like this before?",
-    "symptoms": "What's the main thing you're seeing right now — and anything else happening with it?",
+    "duration": "When did this start — and has it been steady or on-and-off?",
+    "progression": "Compared to day one, would you say it's getting worse, about the same, or easing up?",
+    "appetite_water": "How are eating and drinking — normal, off, or refusing both?",
+    "demeanor": "Energy-wise, are they acting like themselves or quieter / uncomfortable?",
+    "age_weight": "How old are they, roughly, and about how much do they weigh?",
+    "exposure": "Any chance they got into something odd — table scraps, plants, meds, or a new food?",
+    "vomit_detail": "On the vomiting — how often, and any blood, bile, or foam?",
+    "stool_detail": "And the stool — how often, and watery, bloody, or with mucus?",
+    "urination": "How's peeing been — normal, straining, accidents, or blood?",
+    "breathing_detail": "Tell me about the breathing — coughing, panting at rest, or working hard?",
+    "skin_itch": "Where are they itchy or licking most — any rash, bumps, or hair loss?",
+    "neuro": "Any wobbliness, head tilt, circling, or has this happened before?",
+    "symptoms": "What's the main thing you're seeing right now — anything else with it?",
 }
 
 

@@ -55,11 +55,7 @@ def format_response(
         tl = "moderate"
 
     rec = [str(x) for x in (data.get("recommended_action") or []) if str(x).strip()]
-    if follow_up_questions:
-        # One follow-up question per assistant turn keeps the dialogue focused.
-        follow_up_questions = follow_up_questions[:1]
-        prefix = "Quick question — " if clarification_first else "Your vet might ask: "
-        rec = [f"{prefix}{q}" for q in follow_up_questions] + rec
+    # Do not append templated follow-up questions — the model weaves questions into summary when needed.
 
     return FormattedResponse(
         triage_level=tl,  # type: ignore[arg-type]

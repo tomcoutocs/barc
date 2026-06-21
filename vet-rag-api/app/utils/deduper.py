@@ -20,8 +20,9 @@ class ContentDeduper:
         self._min_words = min_words
         self._seen: set[str] = set()
 
-    def accept(self, text: str) -> bool:
-        if word_count(text) < self._min_words:
+    def accept(self, text: str, *, min_words: int | None = None) -> bool:
+        threshold = self._min_words if min_words is None else min_words
+        if word_count(text) < threshold:
             return False
         fp = content_fingerprint(text)
         if fp in self._seen:

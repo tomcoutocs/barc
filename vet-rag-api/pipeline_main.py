@@ -7,6 +7,9 @@ Usage (from vet-rag-api/, venv active):
 Bulk Merck dog + cat owner pages (same article cap each):
   MERCK_CRAWL_MAX_ARTICLES=500 python pipeline_main.py
 
+AVMA Journals (JAVMA / AJVR abstracts, dog & cat articles):
+  AVMA_JOURNALS_CRAWL_ENABLED=true python pipeline_main.py
+
 Respect each site's Terms of Use and robots.txt; obtain licenses where required.
 """
 from __future__ import annotations
@@ -21,6 +24,7 @@ if str(_ROOT) not in sys.path:
 
 from app.config import get_settings
 from app.pipeline.process_and_ingest import process_and_ingest
+from app.scrapers.avma_journals_crawl import crawl_avma_journals
 from app.scrapers.merck_crawl import crawl_merck_owner_articles
 from app.scrapers.scrape_dispatch import run_all_scrapers
 
@@ -78,6 +82,23 @@ def main() -> None:
 
     extra_docs = run_all_scrapers(ADDITIONAL_URLS, delay_s=delay) if ADDITIONAL_URLS else []
     all_docs = merck_docs + extra_docs
+
+    if settings.avma_journals_crawl_enabled:
+        log.info(
+            "AVMA journals crawl: max_articles=%s max_visits=%s delay_s=%s require_dog_or_cat=%s",
+            settings.avma_journals_crawl_max_articles,
+            settings.avma_journals_crawl_max_visits,
+            settings.avma_journals_crawl_delay_s,
+            settings.avma_journals_require_dog_or_cat,
+        )
+        avma_docs = crawl_avma_journals(
+            max_articles=settings.avma_journals_crawl_max_articles,
+            max_visits=settings.avma_journals_crawl_max_visits,
+            delay_s=settings.avma_journals_crawl_delay_s,
+            require_dog_or_cat=settings.avma_journals_require_dog_or_cat,
+        )
+        log.info("Collected %s AVMA journal article(s)", len(avma_docs))
+        all_docs = all_docs + avma_docs
 
     n = process_and_ingest(all_docs, min_words=300)
     log.info("Pipeline finished; ingested %s document(s) (after dedupe/min-words)", n)

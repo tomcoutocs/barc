@@ -10,6 +10,7 @@ _AUTHORITY_BY_SOURCE = {
     "aaha": 1.0,
     "wsava": 1.0,
     "avma": 0.9,
+    "avma_journal": 0.95,
 }
 
 _TYPE_BY_SOURCE: dict[str, SourceIngestType] = {
@@ -17,6 +18,7 @@ _TYPE_BY_SOURCE: dict[str, SourceIngestType] = {
     "aaha": "guideline",
     "wsava": "guideline",
     "avma": "org",
+    "avma_journal": "org",
 }
 
 _TOPIC_RULES: list[tuple[re.Pattern[str], str]] = [
