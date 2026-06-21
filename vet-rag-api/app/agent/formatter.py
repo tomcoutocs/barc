@@ -55,13 +55,22 @@ def format_response(
         tl = "moderate"
 
     rec = [str(x) for x in (data.get("recommended_action") or []) if str(x).strip()]
+    causes = [str(x) for x in (data.get("possible_causes") or []) if str(x).strip()]
+    monitor = [str(x) for x in (data.get("what_to_monitor") or []) if str(x).strip()]
+
+    if clarification_first:
+        # One chat bubble per turn while gathering history — no list dumps.
+        causes = []
+        monitor = monitor[:2]
+        rec = rec[:1]
+
     # Do not append templated follow-up questions — the model weaves questions into summary when needed.
 
     return FormattedResponse(
         triage_level=tl,  # type: ignore[arg-type]
         summary=str(data.get("summary") or "").strip() or "See recommended actions.",
-        possible_causes=[str(x) for x in (data.get("possible_causes") or []) if str(x).strip()][:8],
-        what_to_monitor=[str(x) for x in (data.get("what_to_monitor") or []) if str(x).strip()][:8],
+        possible_causes=causes[:8],
+        what_to_monitor=monitor[:8],
         recommended_action=rec[:12],
         urgency_message=str(data.get("urgency_message") or "").strip() or um,
     )

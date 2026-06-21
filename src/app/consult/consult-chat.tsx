@@ -13,7 +13,6 @@ import {
   Lock,
 } from "lucide-react";
 import {
-  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -163,14 +162,27 @@ function petLabel(species?: string | null): { noun: string } {
   return { noun: "dog" };
 }
 
-function splitSummarySentences(summary: string, max = 3): string[] {
-  const trimmed = summary.trim();
-  if (!trimmed) return [];
-  const parts =
-    trimmed.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.map((s) => s.trim()).filter(Boolean) ??
-    [];
-  if (parts.length <= 1) return [trimmed];
-  return parts.slice(0, max);
+function isInvestigationTurn(a: ConsultAgentResponse): boolean {
+  return a.possible_causes.length === 0 && a.recommended_action.length === 0;
+}
+
+function TriageHeader({ level, urgencyMessage }: { level: string; urgencyMessage: string }) {
+  if (level !== "emergency" && level !== "high") return null;
+  return (
+    <div className="mb-2.5 border-b border-[color-mix(in_srgb,var(--color-secondary)_20%,transparent)] pb-2.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="rounded-full bg-primary-container px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-on-primary">
+          {level}
+        </span>
+        {level === "emergency" ? (
+          <AlertTriangle className="h-4 w-4 shrink-0 text-secondary" aria-hidden />
+        ) : null}
+      </div>
+      <p className="mt-2 text-sm font-semibold leading-snug text-secondary">
+        {urgencyMessage}
+      </p>
+    </div>
+  );
 }
 
 function buildStructuredChunks(
@@ -180,130 +192,90 @@ function buildStructuredChunks(
 ): BubbleChunk[] {
   const { noun } = petLabel(species);
   const name = petName?.trim() || `your ${noun}`;
-  const stillInvestigating =
-    a.possible_causes.length === 0 && a.recommended_action.length === 0;
-  const chunks: BubbleChunk[] = [];
+  const investigating = isInvestigationTurn(a);
 
-  if (stillInvestigating) {
-    if (a.triage_level === "high" || a.triage_level === "emergency") {
-      chunks.push({
-        key: "triage-urgent",
-        children: (
-          <p className="text-sm font-semibold leading-snug text-secondary">
-            {a.urgency_message}
-          </p>
-        ),
-      });
-    }
-  } else {
-    if (a.triage_level === "emergency" || a.triage_level === "high") {
-      chunks.push({
-        key: "triage",
+  if (investigating) {
+    return [
+      {
+        key: "turn",
         children: (
           <>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full bg-primary-container px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-on-primary">
-                {a.triage_level}
-              </span>
-              {a.triage_level === "emergency" ? (
-                <AlertTriangle className="h-4 w-4 shrink-0 text-secondary" aria-hidden />
-              ) : null}
-            </div>
-            <p className="mt-2 font-semibold leading-snug text-secondary">
-              {a.urgency_message}
-            </p>
+            <TriageHeader level={a.triage_level} urgencyMessage={a.urgency_message} />
+            <p className="leading-relaxed">{a.summary}</p>
           </>
         ),
-      });
-    }
+      },
+    ];
   }
 
-  const summaryParts = splitSummarySentences(a.summary, stillInvestigating ? 4 : 3);
-  for (const [i, sentence] of summaryParts.entries()) {
-    chunks.push({
-      key: `summary-${i}`,
-      children: <p className="leading-relaxed">{sentence}</p>,
-    });
-  }
-
-  if (a.possible_causes.length > 0) {
-    chunks.push({
-      key: "causes-intro",
+  return [
+    {
+      key: "turn",
       children: (
-        <p className="text-sm leading-relaxed text-on-surface-muted">
-          A few possibilities vets often consider for {name} — not a diagnosis:
-        </p>
+        <div className="space-y-3">
+          <TriageHeader level={a.triage_level} urgencyMessage={a.urgency_message} />
+          {a.summary ? <p className="leading-relaxed">{a.summary}</p> : null}
+          {a.possible_causes.length > 0 ? (
+            <div>
+              <p className="text-sm font-semibold text-on-surface">
+                Possibilities for {name}
+              </p>
+              <p className="mt-0.5 text-xs text-on-surface-muted">
+                Educational only — not a diagnosis
+              </p>
+              <ul className="mt-2 list-disc space-y-1.5 pl-5 leading-relaxed">
+                {a.possible_causes.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {a.what_to_monitor.length > 0 ? (
+            <div>
+              <p className="text-sm font-semibold text-on-surface">Watch for</p>
+              <ul className="mt-2 list-disc space-y-1.5 pl-5 leading-relaxed">
+                {a.what_to_monitor.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {a.recommended_action.length > 0 ? (
+            <div>
+              <p className="text-sm font-semibold text-on-surface">What I&apos;d do next</p>
+              <ul className="mt-2 list-disc space-y-1.5 pl-5 leading-relaxed">
+                {a.recommended_action.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
       ),
-    });
-    for (const [i, item] of a.possible_causes.entries()) {
-      chunks.push({
-        key: `cause-${i}`,
-        children: <p className="leading-relaxed">{item}</p>,
-      });
-    }
-  }
-
-  if (a.what_to_monitor.length > 0) {
-    chunks.push({
-      key: "monitor-intro",
-      children: (
-        <p className="text-sm font-semibold text-on-surface">Watch for</p>
-      ),
-    });
-    for (const [i, item] of a.what_to_monitor.entries()) {
-      chunks.push({
-        key: `monitor-${i}`,
-        children: <p className="leading-relaxed">{item}</p>,
-      });
-    }
-  }
-
-  if (a.recommended_action.length > 0) {
-    chunks.push({
-      key: "actions-intro",
-      children: (
-        <p className="text-sm font-semibold text-on-surface">What I&apos;d do next</p>
-      ),
-    });
-    for (const [i, item] of a.recommended_action.entries()) {
-      chunks.push({
-        key: `action-${i}`,
-        children: <p className="leading-relaxed">{item}</p>,
-      });
-    }
-  }
-
-  return chunks;
+    },
+  ];
 }
 
 function buildPlainChunks(content: string): BubbleChunk[] {
-  const blocks = content
-    .split(/\n{2,}/)
-    .map((p) => p.trim())
-    .filter(Boolean);
-  if (blocks.length <= 1) {
-    return [{ key: "plain", children: content }];
-  }
-  return blocks.slice(0, 5).map((block, i) => ({
-    key: `plain-${i}`,
-    children: <p className="whitespace-pre-wrap leading-relaxed">{block}</p>,
-  }));
+  return [
+    {
+      key: "plain",
+      children: <p className="whitespace-pre-wrap leading-relaxed">{content}</p>,
+    },
+  ];
 }
 
 export function AssistantConsultMessage({
   content,
   species,
   petName,
-  stagger,
-  onStaggerProgress,
-  onStaggerComplete,
+  animate,
 }: {
   content: string;
   species?: string | null;
   petName?: string | null;
-  stagger?: boolean;
-  onStaggerProgress?: () => void;
-  onStaggerComplete?: () => void;
+  /** Brief enter animation when a new assistant message arrives */
+  animate?: boolean;
 }) {
   const { chunks, structured } = useMemo(() => {
     const parsed = parseStoredAgentContent(content);
@@ -314,62 +286,17 @@ export function AssistantConsultMessage({
   }, [content, species, petName]);
 
   const level = structured?.triage_level ?? "low";
-  const totalChunks = chunks.length;
-
-  const [animatedCount, setAnimatedCount] = useState(0);
-  const visibleCount = stagger ? animatedCount : totalChunks;
-
-  useEffect(() => {
-    if (!stagger) return;
-    let cancelled = false;
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    timers.push(
-      setTimeout(() => {
-        let shown = 0;
-        const showNext = () => {
-          if (cancelled) return;
-          shown += 1;
-          setAnimatedCount(shown);
-          onStaggerProgress?.();
-          if (shown >= totalChunks) {
-            onStaggerComplete?.();
-            return;
-          }
-          timers.push(setTimeout(showNext, 520));
-        };
-        showNext();
-      }, 320),
-    );
-    return () => {
-      cancelled = true;
-      timers.forEach(clearTimeout);
-    };
-  }, [stagger, totalChunks, onStaggerProgress, onStaggerComplete]);
-
-  if (!structured) {
-    return (
-      <div className="flex flex-col gap-3">
-        {chunks.slice(0, visibleCount).map((chunk, idx) => (
-          <div
-            key={chunk.key}
-            className={`max-w-[92%] rounded-3xl rounded-bl-md bg-[var(--color-surface)] px-5 py-4 text-sm leading-relaxed text-[var(--color-on-surface)] shadow-[var(--shadow-float)] ${
-              stagger && idx === visibleCount - 1 ? "consult-bubble-enter" : ""
-            }`}
-          >
-            {chunk.children}
-          </div>
-        ))}
-      </div>
-    );
-  }
+  const bubbleClass = structured
+    ? `border-2 ${triageBubbleClass(level)}`
+    : "bg-[var(--color-surface)]";
 
   return (
     <div className="flex flex-col gap-3">
-      {chunks.slice(0, visibleCount).map((chunk, idx) => (
+      {chunks.map((chunk) => (
         <div
           key={chunk.key}
-          className={`max-w-[92%] rounded-3xl rounded-bl-md border-2 px-5 py-4 text-sm leading-relaxed text-[var(--color-on-surface)] shadow-[var(--shadow-float)] ${triageBubbleClass(level)} ${
-            stagger && idx === visibleCount - 1 ? "consult-bubble-enter" : ""
+          className={`max-w-[92%] rounded-3xl rounded-bl-md px-5 py-4 text-sm leading-relaxed text-[var(--color-on-surface)] shadow-[var(--shadow-float)] ${bubbleClass} ${
+            animate ? "consult-bubble-enter" : ""
           }`}
         >
           {chunk.children}
@@ -435,7 +362,7 @@ export function ConsultChat({
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [staggerAssistantId, setStaggerAssistantId] = useState<string | null>(null);
+  const [animateAssistantId, setAnimateAssistantId] = useState<string | null>(null);
   const [showFeedback, setShowFeedback] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
@@ -444,23 +371,15 @@ export function ConsultChat({
     [pets, activePetId],
   );
 
-  const bumpScroll = useCallback(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, []);
-
-  const completeStagger = useCallback(() => {
-    setStaggerAssistantId(null);
-  }, []);
-
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, sending, staggerAssistantId]);
+  }, [messages, sending]);
 
   function startNewChat() {
     setThreadId(null);
     setMessages([]);
     setError(null);
-    setStaggerAssistantId(null);
+    setAnimateAssistantId(null);
     setShowFeedback(false);
   }
 
@@ -519,7 +438,7 @@ export function ConsultChat({
       }
       if (data.threadId) setThreadId(data.threadId);
       if (data.userMessage && data.assistantMessage) {
-        setStaggerAssistantId(data.assistantMessage.id);
+        setAnimateAssistantId(data.assistantMessage.id);
         setMessages((m) => [
           ...m.filter((x) => x.id !== optimisticId),
           data.userMessage!,
@@ -768,9 +687,7 @@ export function ConsultChat({
                     content={m.content}
                     species={activePet?.species}
                     petName={activePet?.name}
-                    stagger={m.id === staggerAssistantId}
-                    onStaggerProgress={bumpScroll}
-                    onStaggerComplete={completeStagger}
+                    animate={m.id === animateAssistantId}
                   />
                 </div>
               ),

@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { CheckCircle2, GraduationCap, Send } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AssistantConsultMessage,
   type ConsultMessage,
@@ -151,7 +151,7 @@ export function TeachingChat({ pets }: { pets: ConsultPet[] }) {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [staggerAssistantId, setStaggerAssistantId] = useState<string | null>(null);
+  const [animateAssistantId, setAnimateAssistantId] = useState<string | null>(null);
   const [reviewedIds, setReviewedIds] = useState<Set<string>>(new Set());
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
@@ -159,10 +159,6 @@ export function TeachingChat({ pets }: { pets: ConsultPet[] }) {
     () => pets.find((p) => p.id === activePetId) ?? pets[0],
     [pets, activePetId],
   );
-
-  const bumpScroll = useCallback(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -179,7 +175,7 @@ export function TeachingChat({ pets }: { pets: ConsultPet[] }) {
     setThreadId(null);
     setMessages([]);
     setError(null);
-    setStaggerAssistantId(null);
+    setAnimateAssistantId(null);
     setReviewedIds(new Set());
   }
 
@@ -226,7 +222,7 @@ export function TeachingChat({ pets }: { pets: ConsultPet[] }) {
       }
       if (data.threadId) setThreadId(data.threadId);
       if (data.userMessage && data.assistantMessage) {
-        setStaggerAssistantId(data.assistantMessage.id);
+        setAnimateAssistantId(data.assistantMessage.id);
         setMessages((m) => [
           ...m.filter((x) => x.id !== optimisticId),
           data.userMessage!,
@@ -312,9 +308,7 @@ export function TeachingChat({ pets }: { pets: ConsultPet[] }) {
                   <AssistantConsultMessage
                     content={m.content}
                     species={activePet?.species}
-                    stagger={m.id === staggerAssistantId}
-                    onStaggerProgress={bumpScroll}
-                    onStaggerComplete={() => setStaggerAssistantId(null)}
+                    animate={m.id === animateAssistantId}
                   />
                   {threadId && !m.id.startsWith("local-") && !reviewedIds.has(m.id) ? (
                     <TeachingReviewPanel
